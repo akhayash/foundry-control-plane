@@ -62,6 +62,7 @@ services.AddSingleton<WorkflowAgentStrategy>();
 // Runners
 services.AddTransient<AgentServiceRunner>();
 services.AddTransient<WorkflowRunner>();
+services.AddTransient<HostedAgentRunner>();
 
 await using var serviceProvider = services.BuildServiceProvider();
 
@@ -98,7 +99,8 @@ if (autoMode && typeArg != null)
     {
         "prompt" => "1. Prompt Agent (単一エージェント)",
         "workflow" => "2. Workflow Agent (マルチステップ)",
-        _ => "3. 終了"
+        "hosted" => "3. Hosted Agent (コンテナ化)",
+        _ => "4. 終了"
     };
     AnsiConsole.MarkupLine($"[dim]選択: {agentType}[/]");
 }
@@ -107,12 +109,13 @@ else
     agentType = AnsiConsole.Prompt(
         new SelectionPrompt<string>()
             .Title("[bold]エージェントタイプを選択してください:[/]")
-            .PageSize(5)
+            .PageSize(6)
             .AddChoices(new[]
             {
                 "1. Prompt Agent (単一エージェント)",
                 "2. Workflow Agent (マルチステップ)",
-                "3. 終了"
+                "3. Hosted Agent (コンテナ化)",
+                "4. 終了"
             }));
 }
 
@@ -131,7 +134,12 @@ try
             await workflowRunner.RunAsync(autoMode, !noCleanup);
             break;
 
-        case "3. 終了":
+        case "3. Hosted Agent (コンテナ化)":
+            var hostedRunner = serviceProvider.GetRequiredService<HostedAgentRunner>();
+            await hostedRunner.RunAsync(autoMode);
+            break;
+
+        case "4. 終了":
             AnsiConsole.MarkupLine("[dim]終了します[/]");
             break;
     }

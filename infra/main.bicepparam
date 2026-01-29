@@ -6,8 +6,8 @@ using './main.bicep'
 
 // Development Environment
 param environment = 'dev'
-param location = 'eastus2'
-param baseName = 'fcpdemo'
+param location = 'northcentralus'
+param baseName = 'fcpncus'
 param tags = {
   project: 'foundry-control-plane-demo'
   environment: 'dev'

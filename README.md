@@ -60,6 +60,25 @@ Azure AI Foundryの Control Plane を使用して、各種エージェントの�
 - .NET 10.0 SDK（LTS）
 - PowerShell 7.5+
 
+### 認証設定
+
+このプロジェクトでは **AzureCliCredential** を使用して Azure に認証します。
+
+```bash
+# 事前にAzure CLIでログイン
+az login
+```
+
+> ⚠️ **重要**: `DefaultAzureCredential` は使用しません。ローカル開発では常に `AzureCliCredential` を使用してください。
+
+### リージョン制約
+
+> ⚠️ **Hosted Agent (Preview)** は現在 **North Central US** リージョンのみで利用可能です。
+> 2026年以降、順次リージョンが拡大される予定です。
+>
+> そのため、このデモでは `northcentralus` にデプロイすることを推奨します。
+> 他のリージョンにデプロイした場合、Hosted Agent 機能は使用できません。
+
 ## プロジェクト構成
 
 ```text
@@ -70,18 +89,27 @@ foundry-control-plane/
 │   └── main.bicepparam                # パラメータファイル
 ├── scripts/
 │   ├── deploy.ps1                     # デプロイスクリプト
+│   ├── deploy-hosted-agent.ps1        # Hosted Agentデプロイスクリプト
 │   └── cleanup.ps1                    # クリーンアップスクリプト
 └── src/
-    └── FoundryControlPlane/           # C# CLIアプリケーション
-        ├── FoundryControlPlane.csproj
-        ├── Program.cs
-        ├── Agents/
-        │   └── AgentManager.cs        # エージェント管理
-        ├── Services/
-        │   └── TelemetryService.cs    # テレメトリ
-        └── Scenarios/                 # デモシナリオ
-            ├── Scenario1_AgentLifecycle.cs
-            └── Scenario2_GroupChat.cs
+    ├── FoundryControlPlane/           # C# CLIアプリケーション
+    │   ├── FoundryControlPlane.csproj
+    │   ├── Program.cs
+    │   ├── Agents/
+    │   │   ├── AgentServiceStrategy.cs    # Prompt Agent
+    │   │   └── WorkflowAgentStrategy.cs   # Workflow Agent
+    │   ├── Runners/
+    │   │   ├── AgentServiceRunner.cs
+    │   │   ├── WorkflowRunner.cs
+    │   │   └── HostedAgentRunner.cs       # Hosted Agent実行
+    │   └── Telemetry/
+    │       └── TelemetryService.cs        # テレメトリ
+    └── HostedAgent/                   # Hosted Agentコンテナ
+        ├── HostedAgent.csproj
+        ├── Program.cs                 # Hosting Adapterエントリポイント
+        ├── Dockerfile                 # マルチステージビルド
+        ├── agent.yaml                 # azd ai agent 定義
+        └── appsettings.json
 ```
 
 ### Azure Verified Modules (AVM) 使用
@@ -154,6 +182,10 @@ dotnet run -- agent delete --id <agent-id>
 
 # 2. Hosted Agent
 dotnet run -- agent create --type hosted --name "CodeReviewer"
+# ローカルテスト
+dotnet run -- --type hosted  # メニューから "1. ローカルテスト" 選択
+# Dockerビルド & ACRプッシュ
+./scripts/deploy-hosted-agent.ps1 -ResourceGroup "rg-foundry-demo"
 
 # 3. カスタムエージェント（Microsoft Agent Framework）
 dotnet run -- agent create --type custom --name "CustomAssistant"
@@ -222,15 +254,16 @@ API Managementを介したAI Gateway機能をPortal UIで確認・設定しま�
 
 ### デプロイされるAzureリソース
 
-| リソース                    | 用途                                                       |
-| --------------------------- | ---------------------------------------------------------- |
-| **Azure AI Foundry**        | エージェント管理の中核 + AI Services（モデルデプロイ含む） |
-| **Azure Storage**           | ファイル・ドキュメント保存                                 |
-| **Azure Cosmos DB**         | スレッド・メッセージデータ保存                             |
-| **Application Insights**    | トレーシング・監視                                         |
-| **API Management**          | AI Gateway（レート制限、キャッシング）                     |
-| **Azure Managed Redis**     | セマンティックキャッシング                                 |
-| **Azure AI Content Safety** | コンテンツフィルタリング                                   |
+| リソース                     | 用途                                                       |
+| ---------------------------- | ---------------------------------------------------------- |
+| **Azure AI Foundry**         | エージェント管理の中核 + AI Services（モデルデプロイ含む） |
+| **Azure Storage**            | ファイル・ドキュメント保存                                 |
+| **Azure Cosmos DB**          | スレッド・メッセージデータ保存                             |
+| **Azure Container Registry** | Hosted Agent コンテナイメージ格納                          |
+| **Application Insights**     | トレーシング・監視                                         |
+| **API Management**           | AI Gateway（レート制限、キャッシング）                     |
+| **Azure Managed Redis**      | セマンティックキャッシング                                 |
+| **Azure AI Content Safety**  | コンテンツフィルタリング                                   |
 
 ### リソースグループ構成
 
@@ -241,6 +274,7 @@ rg-foundry-demo
 │       └── model deployments       # gpt-4o, gpt-4o-mini, text-embedding-3
 ├── st*                             # Storage Account
 ├── kv*                             # Key Vault
+├── acr*                            # Azure Container Registry (Hosted Agent用)
 ├── log-*                           # Log Analytics Workspace
 ├── appi-*                          # Application Insights
 ├── apim-*                          # API Management
@@ -263,15 +297,17 @@ AZURE_APIM_GATEWAY_URL=https://<apim>.azure-api.net
 
 ## 使用技術
 
-| カテゴリ                       | 技術                           | バージョン   |
-| ------------------------------ | ------------------------------ | ------------ |
-| **言語**                       | C# / .NET                      | 10.0 LTS     |
-| **エージェントフレームワーク** | Microsoft Agent Framework      | 1.0.0        |
-| **Azure SDK**                  | Azure.AI.Projects              | 1.2.0-beta.5 |
-|                                | Azure.AI.Agents.Persistent     | 1.0.0        |
-|                                | Azure.Identity                 | 1.17.1       |
-| **監視**                       | OpenTelemetry                  | 1.12.0       |
-| **IaC**                        | Bicep + Azure Verified Modules | 0.40+        |
+| カテゴリ                       | 技術                           | バージョン       |
+| ------------------------------ | ------------------------------ | ---------------- |
+| **言語**                       | C# / .NET                      | 10.0 LTS         |
+| **エージェントフレームワーク** | Microsoft Agent Framework      | 1.0.0            |
+| **Azure SDK**                  | Azure.AI.Projects              | 1.2.0-beta.5     |
+|                                | Azure.AI.Agents.Persistent     | 1.0.0            |
+|                                | Azure.AI.AgentServer.Core      | preview (Hosted) |
+|                                | Azure.Identity                 | 1.17.1           |
+| **監視**                       | OpenTelemetry                  | 1.12.0           |
+| **コンテナ**                   | Docker                         | -                |
+| **IaC**                        | Bicep + Azure Verified Modules | 0.40+            |
 
 ## クリーンアップ
 

@@ -1,0 +1,12 @@
+# Azure Developer CLI (azd) configuration
+# https://learn.microsoft.com/azure/developer/azure-developer-cli/
+
+name: foundry-control-plane
+metadata:
+  template: azd-init
+
+# Infrastructure configuration
+infra:
+  provider: bicep
+  path: infra
+  module: main

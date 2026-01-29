@@ -1,0 +1,46 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>HostedAgent</RootNamespace>
+    <AssemblyName>HostedAgent</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <!-- Container settings -->
+    <ContainerRepository>hosted-agent</ContainerRepository>
+    <UserSecretsId>e681011f-5360-4753-ab74-2437e4f53d70</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Azure AI Agent Server (Hosting Adapter) -->
+    <PackageReference Include="Azure.AI.AgentServer.AgentFramework" Version="1.0.0-beta.6" />
+    
+    <!-- Microsoft Agent Framework -->
+    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.0.0-preview.251125.1" />
+    
+    <!-- Azure OpenAI -->
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.5.0-beta.1" />
+    
+    <!-- Azure Identity -->
+    <PackageReference Include="Azure.Identity" Version="1.17.0" />
+    
+    <!-- Microsoft.Extensions.AI -->
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.0.1-preview.1.25571.5" />
+    
+    <!-- Configuration -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="appsettings.Development.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

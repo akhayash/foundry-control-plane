@@ -1,0 +1,16 @@
+$schema: https://aka.ms/azure-ai-agent-manifest-schema/v1
+template:
+  kind: hosted
+name: demo-hosted-agent
+displayName: Demo Hosted Agent
+description: Azure AI Foundry Hosted Agent Demo
+container:
+  dockerfile: Dockerfile
+  context: .
+  port: 8088
+environment:
+  - name: AZURE_OPENAI_DEPLOYMENT_NAME
+    value: gpt-4o-mini
+protocols:
+  - name: responses
+    version: v1
