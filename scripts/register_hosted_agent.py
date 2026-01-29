@@ -3,18 +3,30 @@
 Hosted Agent を Azure AI Foundry に登録するスクリプト
 
 使用方法:
-    python scripts/register_hosted_agent.py \
+    python scripts/register_hosted_agent.py create \
         --endpoint "https://<account>.services.ai.azure.com/api/projects/<project>" \
         --image "acrname.azurecr.io/hosted-agent:v1" \
         --name "demo-hosted-agent"
 
+    # 作成と同時にPublish（ポータルに表示）:
+    python scripts/register_hosted_agent.py create \
+        --endpoint "https://<account>.services.ai.azure.com/api/projects/<project>" \
+        --image "acrname.azurecr.io/hosted-agent:v1" \
+        --name "demo-hosted-agent" \
+        --publish \
+        --subscription-id <sub-id> \
+        --resource-group <rg-name>
+
 前提条件:
-    - pip install azure-ai-projects>=2.0.0b3 azure-identity
+    - pip install azure-ai-projects>=2.0.0b3 azure-identity requests
     - az login でログイン済み
 """
 
 import argparse
+import re
 import sys
+import time
+import requests
 from azure.identity import AzureCliCredential
 from azure.ai.projects import AIProjectClient
 from azure.ai.projects.models import (
@@ -24,6 +36,113 @@ from azure.ai.projects.models import (
 )
 
 
+def publish_agent(
+    credential: AzureCliCredential,
+    subscription_id: str,
+    resource_group: str,
+    account_name: str,
+    project_name: str,
+    agent_name: str,
+    agent_version: str,
+    app_name: str | None = None,
+    deployment_type: str = "Hosted",
+) -> bool:
+    """
+    エージェントをPublish（Agent ApplicationとDeploymentを作成）
+    
+    Args:
+        credential: Azure認証情報
+        subscription_id: AzureサブスクリプションID
+        resource_group: リソースグループ名  
+        account_name: AI Servicesアカウント名
+        project_name: プロジェクト名
+        agent_name: エージェント名
+        agent_version: エージェントバージョン
+        app_name: アプリケーション名（省略時はエージェント名を使用）
+        deployment_type: "Hosted" または "Managed"
+    """
+    if app_name is None:
+        app_name = f"{agent_name}-app"
+    
+    deployment_name = f"{agent_name}-deployment"
+    api_version = "2025-10-01-preview"
+    
+    # ARM用トークンを取得
+    token = credential.get_token("https://management.azure.com/.default").token
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    
+    base_url = f"https://management.azure.com/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.CognitiveServices/accounts/{account_name}/projects/{project_name}"
+    
+    # 1. Agent Applicationを作成
+    print(f"Creating Agent Application: {app_name}")
+    app_url = f"{base_url}/applications/{app_name}?api-version={api_version}"
+    app_payload = {
+        "properties": {
+            "displayName": app_name,
+            "agents": [{"agentName": agent_name}],
+        }
+    }
+    
+    resp = requests.put(app_url, headers=headers, json=app_payload)
+    if resp.status_code not in [200, 201, 202]:
+        print(f"✗ Failed to create Agent Application: {resp.status_code}")
+        print(f"  Response: {resp.text}")
+        return False
+    print(f"  ✓ Agent Application created/updated")
+    
+    # 2. Deploymentを作成
+    print(f"Creating Deployment: {deployment_name}")
+    deploy_url = f"{base_url}/applications/{app_name}/agentdeployments/{deployment_name}?api-version={api_version}"
+    
+    deploy_payload = {
+        "properties": {
+            "displayName": deployment_name,
+            "deploymentType": deployment_type,
+            "protocols": [
+                {"protocol": "responses", "version": "1.0"}
+            ],
+            "agents": [
+                {"agentName": agent_name, "agentVersion": agent_version}
+            ],
+        }
+    }
+    
+    # Hostedの場合はreplica設定を追加
+    if deployment_type == "Hosted":
+        deploy_payload["properties"]["minReplicas"] = 1
+        deploy_payload["properties"]["maxReplicas"] = 1
+    
+    resp = requests.put(deploy_url, headers=headers, json=deploy_payload)
+    if resp.status_code not in [200, 201, 202]:
+        print(f"✗ Failed to create Deployment: {resp.status_code}")
+        print(f"  Response: {resp.text}")
+        return False
+    print(f"  ✓ Deployment created/updated")
+    
+    # 3. デプロイメント状態を確認（オプション）
+    print("Waiting for deployment to start...")
+    for _ in range(6):  # 最大30秒待機
+        time.sleep(5)
+        resp = requests.get(deploy_url, headers=headers)
+        if resp.status_code == 200:
+            data = resp.json()
+            state = data.get("properties", {}).get("state", "Unknown")
+            prov_state = data.get("properties", {}).get("provisioningState", "Unknown")
+            print(f"  State: {state}, ProvisioningState: {prov_state}")
+            if state == "Running":
+                break
+    
+    print()
+    print(f"✓ Agent published successfully!")
+    print(f"  Application: {app_name}")
+    print(f"  Deployment: {deployment_name}")
+    print(f"  Endpoint: https://{account_name}.services.ai.azure.com/api/projects/{project_name}/applications/{app_name}/protocols/openai")
+    return True
+
+
 def create_hosted_agent(
     endpoint: str,
     image: str,
@@ -31,12 +150,17 @@ def create_hosted_agent(
     cpu: str = "1",
     memory: str = "2Gi",
     model_name: str = "gpt-4o-mini",
+    publish: bool = False,
+    subscription_id: str | None = None,
+    resource_group: str | None = None,
 ) -> None:
     """Hosted Agent を作成/更新"""
     print(f"Creating hosted agent: {name}")
     print(f"  Endpoint: {endpoint}")
     print(f"  Image: {image}")
     print(f"  CPU: {cpu}, Memory: {memory}")
+    if publish:
+        print(f"  Publish: Yes (will appear in Portal)")
     print()
 
     # Extract account name from project endpoint to build OpenAI endpoint
@@ -52,6 +176,23 @@ def create_hosted_agent(
     credential = AzureCliCredential()
     client = AIProjectClient(endpoint=endpoint, credential=credential)
 
+    # Application Insights 接続文字列を取得（トレース用）
+    try:
+        app_insights_conn_str = client.telemetry.get_application_insights_connection_string()
+        print(f"  ✓ Application Insights connected for tracing")
+    except Exception:
+        app_insights_conn_str = None
+        print(f"  ⚠ Application Insights not configured (tracing disabled)")
+
+    # 環境変数を構築
+    env_vars = {
+        "AZURE_AI_PROJECT_ENDPOINT": endpoint,
+        "AZURE_OPENAI_ENDPOINT": openai_endpoint,
+        "AZURE_OPENAI_DEPLOYMENT_NAME": model_name,
+    }
+    if app_insights_conn_str:
+        env_vars["APPLICATIONINSIGHTS_CONNECTION_STRING"] = app_insights_conn_str
+
     try:
         agent = client.agents.create_version(
             agent_name=name,
@@ -62,22 +203,50 @@ def create_hosted_agent(
                 cpu=cpu,
                 memory=memory,
                 image=image,
-                environment_variables={
-                    "AZURE_AI_PROJECT_ENDPOINT": endpoint,
-                    "AZURE_OPENAI_ENDPOINT": openai_endpoint,
-                    "AZURE_OPENAI_DEPLOYMENT_NAME": model_name,
-                },
+                environment_variables=env_vars,
             ),
         )
         print(f"✓ Agent created successfully")
         print(f"  Name: {agent.name}")
         print(f"  Version: {agent.version}")
         print()
-        print("次のステップ:")
-        print("  1. Azure AI Foundry Portal でプロジェクトを開く")
-        print(f"  2. Agents → {name} を選択")
-        print("  3. 'Start' でエージェントを起動")
-        print("  4. Playground でテスト")
+        
+        # Publish処理
+        if publish:
+            if not subscription_id or not resource_group:
+                print("✗ --publish requires --subscription-id and --resource-group", file=sys.stderr)
+                sys.exit(1)
+            
+            # エンドポイントからプロジェクト名を抽出
+            project_match = re.search(r"/projects/([^/]+)", endpoint)
+            project_name = project_match.group(1) if project_match else None
+            
+            if not project_name:
+                print("✗ Could not extract project name from endpoint", file=sys.stderr)
+                sys.exit(1)
+            
+            print()
+            print("Publishing agent...")
+            success = publish_agent(
+                credential=credential,
+                subscription_id=subscription_id,
+                resource_group=resource_group,
+                account_name=account_name,
+                project_name=project_name,
+                agent_name=agent.name,
+                agent_version=str(agent.version),
+                deployment_type="Hosted",
+            )
+            if not success:
+                sys.exit(1)
+        else:
+            print("次のステップ:")
+            print("  1. Azure AI Foundry Portal でプロジェクトを開く")
+            print(f"  2. Agents → {name} を選択")
+            print("  3. 'Start' でエージェントを起動")
+            print("  4. Playground でテスト")
+            print()
+            print("  または --publish オプションで自動公開")
     except Exception as e:
         print(f"✗ Agent creation failed: {e}", file=sys.stderr)
         sys.exit(1)
@@ -129,6 +298,15 @@ def main():
     create_parser.add_argument(
         "--model", default="gpt-4o-mini", help="モデル名 (default: gpt-4o-mini)"
     )
+    create_parser.add_argument(
+        "--publish", action="store_true", help="作成後にPublish（ポータルに表示）"
+    )
+    create_parser.add_argument(
+        "--subscription-id", help="AzureサブスクリプションID（--publish時に必要）"
+    )
+    create_parser.add_argument(
+        "--resource-group", help="リソースグループ名（--publish時に必要）"
+    )
 
     # list コマンド
     list_parser = subparsers.add_parser("list", help="エージェント一覧")
@@ -153,6 +331,9 @@ def main():
             cpu=args.cpu,
             memory=args.memory,
             model_name=args.model,
+            publish=args.publish,
+            subscription_id=getattr(args, 'subscription_id', None),
+            resource_group=getattr(args, 'resource_group', None),
         )
     elif args.command == "list":
         list_agents(endpoint=args.endpoint)
