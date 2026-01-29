@@ -191,30 +191,29 @@ public class WorkflowAgentStrategy : IAgentStrategy
     /// </summary>
     public static string GetSampleWorkflowYaml(string promptAgentName)
     {
-        // trigger の中に actions を配置する構造
+        // 式（expression）は引用符なしで記述する必要がある
+        // InvokeAzureAgentの応答はLocal.AgentResponseに格納される
         return $@"kind: workflow
 trigger:
   kind: OnConversationStart
   id: demo_workflow
   actions:
-    - kind: CreateConversation
-      id: create_conversation
-      conversationId: Local.ConversationId
     - kind: SendActivity
       id: welcome_message
       activity: 🚀 ワークフローエージェントへようこそ！
+    - kind: SetVariable
+      id: init_message
+      variable: Local.UserInput
+      value: =UserMessage(System.LastMessageText)
     - kind: InvokeAzureAgent
       id: call_prompt_agent
-      conversationId: ""=Local.ConversationId""
       agent:
         name: {promptAgentName}
+      conversationId: =System.ConversationId
       input:
-        text: ""=System.LastMessageText""
+        messages: =Local.UserInput
       output:
         messages: Local.AgentResponse
-    - kind: SendActivity
-      id: show_response
-      activity: ""=Last(Local.AgentResponse).Text""
     - kind: SendActivity
       id: completion_message
       activity: ✅ ワークフロー完了！
