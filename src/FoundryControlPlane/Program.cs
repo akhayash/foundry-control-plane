@@ -51,9 +51,11 @@ services.AddSingleton<TelemetryService>();
 
 // Agents
 services.AddSingleton<AgentServiceStrategy>();
+services.AddSingleton<WorkflowAgentStrategy>();
 
 // Runners
 services.AddTransient<AgentServiceRunner>();
+services.AddTransient<WorkflowRunner>();
 
 await using var serviceProvider = services.BuildServiceProvider();
 
@@ -64,11 +66,37 @@ await telemetry.InitializeAsync();
 var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
 logger.LogInformation("Azure AI Foundry Control Plane Demo を開始します");
 
+// ===== メニュー選択 =====
+var agentType = AnsiConsole.Prompt(
+    new SelectionPrompt<string>()
+        .Title("[bold]エージェントタイプを選択してください:[/]")
+        .PageSize(5)
+        .AddChoices(new[]
+        {
+            "1. Prompt Agent (単一エージェント)",
+            "2. Workflow Agent (マルチステップ)",
+            "3. 終了"
+        }));
+
 // ===== メイン実行 =====
 try
 {
-    var runner = serviceProvider.GetRequiredService<AgentServiceRunner>();
-    await runner.RunAsync();
+    switch (agentType)
+    {
+        case "1. Prompt Agent (単一エージェント)":
+            var promptRunner = serviceProvider.GetRequiredService<AgentServiceRunner>();
+            await promptRunner.RunAsync();
+            break;
+
+        case "2. Workflow Agent (マルチステップ)":
+            var workflowRunner = serviceProvider.GetRequiredService<WorkflowRunner>();
+            await workflowRunner.RunAsync();
+            break;
+
+        case "3. 終了":
+            AnsiConsole.MarkupLine("[dim]終了します[/]");
+            break;
+    }
 }
 catch (Exception ex)
 {
