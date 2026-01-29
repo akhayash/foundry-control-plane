@@ -18,7 +18,7 @@ Azure AI Foundryの Control Plane を使用して、各種エージェントの�
 
 ### アーキテクチャ
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                  スクリプト / CLI (エージェント作成)              │
 └─────────────────────────────────────────────────────────────────┘
@@ -28,9 +28,9 @@ Azure AI Foundryの Control Plane を使用して、各種エージェントの�
 │                Azure AI Foundry Control Plane                 │
 │ ┌───────────────┐ ┌───────────────┐ ┌───────────────────────┐ │
 │ │   Projects    │ │  Connections  │ │     Deployments       │ │
-│ │   • Agents    │ │  • OpenAI     │ │  • gpt-5.2            │ │
-│ │   • Indexes   │ │  • AI Search  │ │  • gpt-5-mini         │ │
-│ │   • Evals     │ │  • Storage    │ │  • text-embedding-3   │ │
+│ │   • Agents    │ │  • OpenAI     │ │  • gpt-4o              │ │
+│ │   • Indexes   │ │  • Storage    │ │  • gpt-4o-mini         │ │
+│ │   • Evals     │ │  • Redis      │ │  • text-embedding-3   │ │
 │ └───────────────┘ └───────────────┘ └───────────────────────┘ │
 └───────────────────────────────────────────────────────────────┘
                                 │
@@ -62,18 +62,12 @@ Azure AI Foundryの Control Plane を使用して、各種エージェントの�
 
 ## プロジェクト構成
 
-```
+```text
 foundry-control-plane/
 ├── README.md                          # このファイル
 ├── infra/                             # Bicepインフラ定義
-│   ├── main.bicep                     # メインテンプレート
-│   ├── main.bicepparam                # パラメータファイル
-│   └── modules/
-│       ├── foundry.bicep              # AI Foundryリソース
-│       ├── apim.bicep                 # API Management (AI Gateway)
-│       ├── redis.bicep                # Azure Managed Redis
-│       ├── app-insights.bicep         # Application Insights
-│       └── content-safety.bicep       # Content Safety
+│   ├── main.bicep                     # メインテンプレート (AVM使用)
+│   └── main.bicepparam                # パラメータファイル
 ├── scripts/
 │   ├── deploy.ps1                     # デプロイスクリプト
 │   └── cleanup.ps1                    # クリーンアップスクリプト
@@ -82,15 +76,30 @@ foundry-control-plane/
         ├── FoundryControlPlane.csproj
         ├── Program.cs
         ├── Agents/
-        │   ├── AgentServiceManager.cs
-        │   ├── HostedAgentManager.cs
-        │   ├── CustomAgentManager.cs
-        │   └── WorkflowAgentManager.cs
-        ├── Workflows/
-        │   └── GroupChatOrchestrator.cs
-        └── Services/
-            └── FoundryClientFactory.cs
+        │   └── AgentManager.cs        # エージェント管理
+        ├── Services/
+        │   └── TelemetryService.cs    # テレメトリ
+        └── Scenarios/                 # デモシナリオ
+            ├── Scenario1_AgentLifecycle.cs
+            └── Scenario2_GroupChat.cs
 ```
+
+### Azure Verified Modules (AVM) 使用
+
+インフラストラクチャは [Azure Verified Modules](https://azure.github.io/Azure-Verified-Modules/) の最新パターンを使用しています：
+
+| モジュール          | AVM パス                                 | バージョン |
+| ------------------- | ---------------------------------------- | ---------- |
+| **AI Foundry**      | `avm/ptn/ai-ml/ai-foundry`               | 0.6.0      |
+| **Storage Account** | `avm/res/storage/storage-account`        | 0.31.0     |
+| **Key Vault**       | `avm/res/key-vault/vault`                | 0.13.3     |
+| **App Insights**    | `avm/res/insights/component`             | 0.7.1      |
+| **Log Analytics**   | `avm/res/operational-insights/workspace` | 0.15.0     |
+| **API Management**  | `avm/res/api-management/service`         | 0.14.0     |
+| **Redis**           | `avm/res/cache/redis`                    | 0.16.4     |
+| **Content Safety**  | `avm/res/cognitive-services/account`     | 0.14.1     |
+
+> **Note**: AVM AI Foundry パターンモジュールは最新の `Microsoft.CognitiveServices/accounts` + `/projects` アーキテクチャを使用しています（旧 ML Workspace Hub/Project ではありません）。
 
 ## クイックスタート
 
@@ -213,32 +222,30 @@ API Managementを介したAI Gateway機能をPortal UIで確認・設定しま�
 
 ### デプロイされるAzureリソース
 
-| リソース                    | 用途                                                     |
-| --------------------------- | -------------------------------------------------------- |
-| **Azure AI Foundry**        | エージェント管理の中核                                   |
-| **Azure OpenAI Service**    | LLMモデル（gpt-5.2, gpt-5-mini, text-embedding-3-large） |
-| **Azure AI Search**         | RAG用ベクトル検索                                        |
-| **Azure Storage**           | ファイル・ドキュメント保存                               |
-| **Azure Cosmos DB**         | スレッド・メッセージデータ保存                           |
-| **Application Insights**    | トレーシング・監視                                       |
-| **API Management**          | AI Gateway（レート制限、キャッシング）                   |
-| **Azure Managed Redis**     | セマンティックキャッシング                               |
-| **Azure AI Content Safety** | コンテンツフィルタリング                                 |
+| リソース                    | 用途                                                       |
+| --------------------------- | ---------------------------------------------------------- |
+| **Azure AI Foundry**        | エージェント管理の中核 + AI Services（モデルデプロイ含む） |
+| **Azure Storage**           | ファイル・ドキュメント保存                                 |
+| **Azure Cosmos DB**         | スレッド・メッセージデータ保存                             |
+| **Application Insights**    | トレーシング・監視                                         |
+| **API Management**          | AI Gateway（レート制限、キャッシング）                     |
+| **Azure Managed Redis**     | セマンティックキャッシング                                 |
+| **Azure AI Content Safety** | コンテンツフィルタリング                                   |
 
 ### リソースグループ構成
 
-```
+```text
 rg-foundry-demo
-├── foundry-demo                    # AI Foundry リソース
-│   └── foundry-demo-project        # Foundry プロジェクト
-├── aoai-demo                       # Azure OpenAI
-├── search-demo                     # AI Search
-├── storage-demo                    # Storage Account
-├── cosmos-demo                     # Cosmos DB
-├── appi-demo                       # Application Insights
-├── apim-demo                       # API Management
-├── redis-demo                      # Managed Redis
-└── content-safety-demo             # Content Safety
+├── aif*                            # AI Foundry Account (CognitiveServices)
+│   └── aifp*                       # AI Foundry Project
+│       └── model deployments       # gpt-4o, gpt-4o-mini, text-embedding-3
+├── st*                             # Storage Account
+├── kv*                             # Key Vault
+├── log-*                           # Log Analytics Workspace
+├── appi-*                          # Application Insights
+├── apim-*                          # API Management
+├── redis-*                         # Azure Cache for Redis
+└── cs-*                            # Content Safety
 ```
 
 ## 環境変数
@@ -250,21 +257,21 @@ AZURE_SUBSCRIPTION_ID=<subscription-id>
 AZURE_RESOURCE_GROUP=rg-foundry-demo
 
 # オプション（デフォルト値あり）
-AZURE_OPENAI_DEPLOYMENT=gpt-5.2
+AZURE_OPENAI_DEPLOYMENT=gpt-4o
 AZURE_APIM_GATEWAY_URL=https://<apim>.azure-api.net
 ```
 
 ## 使用技術
 
-| カテゴリ                       | 技術                       | バージョン |
-| ------------------------------ | -------------------------- | ---------- |
-| **言語**                       | C# / .NET                  | 10.0 LTS   |
-| **エージェントフレームワーク** | Microsoft Agent Framework  | 1.0.0      |
-| **Azure SDK**                  | Azure.AI.Projects          | 2.0.0      |
-|                                | Azure.AI.Agents.Persistent | 1.0.0      |
-|                                | Azure.Identity             | 1.14.0     |
-| **監視**                       | OpenTelemetry              | 1.10.0     |
-| **IaC**                        | Bicep                      | 0.32+      |
+| カテゴリ                       | 技術                           | バージョン   |
+| ------------------------------ | ------------------------------ | ------------ |
+| **言語**                       | C# / .NET                      | 10.0 LTS     |
+| **エージェントフレームワーク** | Microsoft Agent Framework      | 1.0.0        |
+| **Azure SDK**                  | Azure.AI.Projects              | 1.2.0-beta.5 |
+|                                | Azure.AI.Agents.Persistent     | 1.0.0        |
+|                                | Azure.Identity                 | 1.17.1       |
+| **監視**                       | OpenTelemetry                  | 1.12.0       |
+| **IaC**                        | Bicep + Azure Verified Modules | 0.40+        |
 
 ## クリーンアップ
 

@@ -1,0 +1,103 @@
+# =============================================================================
+# .NET / C#
+# =============================================================================
+bin/
+obj/
+out/
+*.dll
+*.exe
+*.pdb
+*.user
+*.suo
+*.cache
+*.log
+*.vspscc
+*.vssscc
+
+# NuGet
+*.nupkg
+**/packages/*
+!**/packages/build/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Visual Studio
+.vs/
+*.sln.docstates
+*.userprefs
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Rider
+.idea/
+*.sln.iml
+
+# User secrets
+secrets.json
+appsettings.Development.json
+appsettings.Local.json
+
+# =============================================================================
+# Bicep / ARM
+# =============================================================================
+# Compiled ARM templates (regenerate from .bicep)
+infra/*.json
+!infra/main.bicepparam
+
+# Bicep module cache
+.bicep/
+
+# =============================================================================
+# Azure
+# =============================================================================
+# Azure Functions
+local.settings.json
+
+# Azure credentials
+.azure/
+azureauth.json
+servicePrincipal.json
+
+# =============================================================================
+# OS / IDE
+# =============================================================================
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+
+# =============================================================================
+# Secrets / Keys (NEVER commit these)
+# =============================================================================
+*.pem
+*.key
+*.pfx
+*.p12
+*.env
+.env.*
+!.env.example
+secrets/
+credentials/
+
+# =============================================================================
+# Logs / Temp
+# =============================================================================
+logs/
+*.log
+tmp/
+temp/
+.temp/
