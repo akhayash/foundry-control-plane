@@ -40,30 +40,30 @@ Azure AI Foundry Hosted Agent のサンプル実装です。
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                     Azure Container Registry                                │
 │                                                                             │
-│   hosted-agent:v5  ◄──── Docker Push                                       │
+│   hosted-agent:latest  ◄─── Docker Push                                    │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### コンポーネント構成
 
-| コンポーネント | 役割 |
-|--------------|------|
-| **Program.cs (Adapter)** | 構成・認証・ホスティング。8088ポートでResponses APIをホスト |
-| **HostedDemoAgent.cs (Agent)** | ビジネスロジック。差し替え可能なエージェント実装 |
-| **Dockerfile** | コンテナイメージのビルド定義 |
-| **agent.yaml** | エージェントのメタデータ定義 |
+| コンポーネント                 | 役割                                                        |
+| ------------------------------ | ----------------------------------------------------------- |
+| **Program.cs (Adapter)**       | 構成・認証・ホスティング。8088ポートでResponses APIをホスト |
+| **HostedDemoAgent.cs (Agent)** | ビジネスロジック。差し替え可能なエージェント実装            |
+| **Dockerfile**                 | コンテナイメージのビルド定義                                |
+| **agent.yaml**                 | エージェントのメタデータ定義                                |
 
 ### Hosted Agent vs Agent Service
 
-| 観点 | Agent Service | Hosted Agent |
-|------|--------------|--------------|
-| ホスティング | Foundryが完全管理 | 自分のコンテナ |
-| コード | 宣言的（YAML + ツール定義） | 完全なC#/Python |
-| カスタマイズ | ツール・ナレッジ追加のみ | 何でもできる |
-| 外部API | Foundry経由 | 直接呼び出し可能 |
-| 状態管理 | Foundry側 | 自分で実装 |
-| モデル | Foundry接続のみ | 複数プロバイダ可 |
+| 観点         | Agent Service               | Hosted Agent     |
+| ------------ | --------------------------- | ---------------- |
+| ホスティング | Foundryが完全管理           | 自分のコンテナ   |
+| コード       | 宣言的（YAML + ツール定義） | 完全なC#/Python  |
+| カスタマイズ | ツール・ナレッジ追加のみ    | 何でもできる     |
+| 外部API      | Foundry経由                 | 直接呼び出し可能 |
+| 状態管理     | Foundry側                   | 自分で実装       |
+| モデル       | Foundry接続のみ             | 複数プロバイダ可 |
 
 ## 前提条件
 
@@ -192,12 +192,12 @@ await agent.RunAIAgentAsync(telemetrySourceName: "Agents");
 public class MyCustomAgent
 {
     private readonly IChatClient _chatClient;
-    
+
     public MyCustomAgent(IChatClient chatClient)
     {
         _chatClient = chatClient;
     }
-    
+
     public ChatClientAgent Build()
     {
         return (ChatClientAgent)new ChatClientAgent(_chatClient,
@@ -214,9 +214,9 @@ public class MyCustomAgent
 
 Bicepで自動設定されますが、手動設定する場合:
 
-| ロール | スコープ | 目的 |
-|-------|---------|------|
-| AcrPull | Container Registry | イメージのプル |
+| ロール                         | スコープ            | 目的               |
+| ------------------------------ | ------------------- | ------------------ |
+| AcrPull                        | Container Registry  | イメージのプル     |
 | Cognitive Services OpenAI User | AI Services Account | OpenAI APIアクセス |
 
 ## トラブルシューティング

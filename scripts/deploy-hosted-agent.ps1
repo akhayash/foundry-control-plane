@@ -122,11 +122,13 @@ $capHostBody = @{
     }
 } | ConvertTo-Json -Compress
 
-try {
-    az rest --method put --url $capHostUrl --headers "content-type=application/json" --body $capHostBody 2>$null
+$capHostResult = az rest --method put --url $capHostUrl --headers "content-type=application/json" --body $capHostBody 2>&1
+if ($LASTEXITCODE -eq 0) {
     Write-Host "  Capability Host 作成/更新完了" -ForegroundColor Green
-} catch {
-    Write-Host "  Capability Host は既に存在または作成中" -ForegroundColor Gray
+} elseif ($capHostResult -match "already exists") {
+    Write-Host "  Capability Host は既に存在" -ForegroundColor Gray
+} else {
+    Write-Host "  Capability Host 作成中またはエラー: $capHostResult" -ForegroundColor Yellow
 }
 Write-Host ""
 

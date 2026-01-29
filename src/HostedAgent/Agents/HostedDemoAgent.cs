@@ -36,15 +36,12 @@ public class HostedDemoAgent
 日本語で回答してください。";
 
     /// <summary>
-    /// AI Agent Framework 互換のエージェントを構築
-    /// RunAIAgentAsync() で Hosted Agent としてホスト可能
+    /// ChatClientAgent を構築
+    /// Adapter側でOpenTelemetryを適用してRunAIAgentAsync()を呼ぶ
     /// </summary>
     public ChatClientAgent Build()
     {
-        return (ChatClientAgent)new ChatClientAgent(_chatClient, name: _name, instructions: _instructions)
-            .AsBuilder()
-            .UseOpenTelemetry(sourceName: "Agents", configure: cfg => cfg.EnableSensitiveData = true)
-            .Build();
+        return new ChatClientAgent(_chatClient, name: _name, instructions: _instructions);
     }
 
     /// <summary>
