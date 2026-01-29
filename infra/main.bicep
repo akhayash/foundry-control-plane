@@ -2,7 +2,7 @@
 // ===================================================================
 // Azure Verified Modules (AVM) を使用した最新パターンのデプロイ
 // - AI Foundry Account & Project (Microsoft.CognitiveServices/accounts ベース)
-// - Azure AI Services (gpt-4o, gpt-4o-mini, text-embedding-3-large)
+// - Azure AI Services (gpt-4o, gpt-4o-mini)
 // - Application Insights + Log Analytics (監視・トレーシング用)
 // - API Management (AI Gateway: レート制限、セマンティックキャッシュ)
 // - Azure Cache for Redis (キャッシュ用)
@@ -42,6 +42,9 @@ param tags object = {
 var resourceGroupName = 'rg-${baseName}-${environment}'
 var uniqueSuffix = uniqueString(subscription().subscriptionId, resourceGroupName)
 var uniqueShort = take(uniqueSuffix, 4)
+var hostedAgentTags = union(tags, {
+  'azd-service-name': 'hosted-agent'
+})
 
 // ===================================================================
 // Resource Group
@@ -133,7 +136,7 @@ module aiFoundry 'br/public:avm/ptn/ai-ml/ai-foundry:0.6.0' = {
   params: {
     baseName: take('${baseName}${environment}', 12)
     location: location
-    tags: tags
+    tags: hostedAgentTags
     includeAssociatedResources: false // 既存リソースを使用
     keyVaultConfiguration: {
       existingResourceId: keyVault.outputs.resourceId
@@ -177,18 +180,6 @@ module aiFoundry 'br/public:avm/ptn/ai-ml/ai-foundry:0.6.0' = {
           capacity: 10
         }
       }
-      {
-        name: 'text-embedding-3-large'
-        model: {
-          format: 'OpenAI'
-          name: 'text-embedding-3-large'
-          version: '1'
-        }
-        sku: {
-          name: 'Standard'
-          capacity: 10
-        }
-      }
     ]
   }
 }
@@ -207,6 +198,44 @@ module contentSafety './modules/content-safety.bicep' = {
     location: location
     tags: tags
     customSubDomainName: 'cs-${baseName}-${environment}-${uniqueShort}'
+  }
+}
+
+// Azure Container Registry (AVM res/container-registry/registry)
+// Hosted Agent のコンテナイメージ格納用
+module containerRegistry 'br/public:avm/res/container-registry/registry:0.9.0' = {
+  scope: resourceGroup
+  name: 'acr-${uniqueSuffix}'
+  params: {
+    name: 'acr${take(baseName, 8)}${take(environment, 3)}${uniqueShort}'
+    location: location
+    tags: tags
+    acrSku: 'Basic'
+    acrAdminUserEnabled: true // ローカル開発用（本番では無効化推奨）
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+// Hosted Agent RBAC (ローカルモジュール)
+// Project MI に ACR Pull と OpenAI User 権限を付与
+module hostedAgentRbac './modules/hostedAgentRbac.bicep' = {
+  scope: resourceGroup
+  name: 'hostedAgentRbac-${uniqueSuffix}'
+  params: {
+    aiServicesName: aiFoundry.outputs.aiServicesName
+    projectName: aiFoundry.outputs.aiProjectName
+    containerRegistryId: containerRegistry.outputs.resourceId
+  }
+}
+
+// AI Foundry Project に Application Insights を接続（トレーシング用）
+module aiFoundryAppInsights './modules/aiFoundryAppInsights.bicep' = {
+  scope: resourceGroup
+  name: 'aiFoundryAppInsights-${uniqueSuffix}'
+  params: {
+    aiServicesName: aiFoundry.outputs.aiServicesName
+    projectName: aiFoundry.outputs.aiProjectName
+    applicationInsightsResourceId: appInsights.outputs.resourceId
   }
 }
 
@@ -274,5 +303,14 @@ output storageAccountName string = storage.outputs.name
 @description('Redis name')
 output redisName string = redis.outputs.name
 
+@description('Container Registry name')
+output containerRegistryName string = containerRegistry.outputs.name
+
+@description('Container Registry login server')
+output containerRegistryLoginServer string = containerRegistry.outputs.loginServer
+
 @description('Content Safety name')
 output contentSafetyName string = contentSafety.outputs.name
+
+@description('AI Foundry Project Managed Identity Principal ID')
+output aiProjectPrincipalId string = hostedAgentRbac.outputs.projectPrincipalId

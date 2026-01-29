@@ -1,0 +1,15 @@
+# Build outputs
+bin/
+obj/
+
+# IDE
+.vs/
+*.user
+*.suo
+
+# Development settings
+appsettings.Development.json
+
+# Git
+.git/
+.gitignore

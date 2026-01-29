@@ -1,0 +1,20 @@
+{
+  "AzureAI": {
+    "FoundryEndpoint": "https://<your-ai-services-account>.cognitiveservices.azure.com/api/projects/<your-project-name>",
+    "ProjectName": "<your-project-name>"
+  },
+  "ApplicationInsights": {
+    "ConnectionString": "<your-app-insights-connection-string>"
+  }
+}
+
+// ================================
+// HostedAgent (src/HostedAgent) 用設定:
+// ================================
+// appsettings.Development.json に以下を記載:
+// {
+//   "AzureOpenAI": {
+//     "Endpoint": "https://<your-ai-services-account>.cognitiveservices.azure.com/",
+//     "DeploymentName": "gpt-4o-mini"
+//   }
+// }

@@ -1,0 +1,6 @@
+{
+    "properties": {
+        "capabilityHostKind": "Agents",
+        "enablePublicHostingEnvironment": true
+    }
+}
