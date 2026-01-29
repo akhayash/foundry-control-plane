@@ -187,36 +187,39 @@ public class WorkflowAgentStrategy : IAgentStrategy
     }
 
     /// <summary>
-    /// サンプルのワークフローYAMLを取得
+    /// サンプルのワークフローYAMLを取得（デモ用の豊富なワークフロー）
     /// </summary>
     public static string GetSampleWorkflowYaml(string promptAgentName)
     {
-        return $"""
-            kind: workflow
-            trigger:
-              kind: OnConversationStart
-              id: demo_workflow
-            actions:
-              - kind: SendActivity
-                id: welcome_message
-                activity: "ワークフローを開始します..."
-
-              - kind: InvokeAzureAgent
-                id: call_prompt_agent
-                description: "Prompt Agent を呼び出して応答を取得"
-                agent:
-                  name: {promptAgentName}
-                input:
-                  messages: "=System.LastMessageText"
-                output:
-                  messages: Local.AgentResponse
-
-              - kind: SendActivity
-                id: send_response
-                activity: "=Local.AgentResponse"
-
-              - kind: EndConversation
-                id: end_conversation
-            """;
+        // trigger の中に actions を配置する構造
+        return $@"kind: workflow
+trigger:
+  kind: OnConversationStart
+  id: demo_workflow
+  actions:
+    - kind: CreateConversation
+      id: create_conversation
+      conversationId: Local.ConversationId
+    - kind: SendActivity
+      id: welcome_message
+      activity: 🚀 ワークフローエージェントへようこそ！
+    - kind: InvokeAzureAgent
+      id: call_prompt_agent
+      conversationId: ""=Local.ConversationId""
+      agent:
+        name: {promptAgentName}
+      input:
+        text: ""=System.LastMessageText""
+      output:
+        messages: Local.AgentResponse
+    - kind: SendActivity
+      id: show_response
+      activity: ""=Last(Local.AgentResponse).Text""
+    - kind: SendActivity
+      id: completion_message
+      activity: ✅ ワークフロー完了！
+    - kind: EndConversation
+      id: end_conversation
+";
     }
 }

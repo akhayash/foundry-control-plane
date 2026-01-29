@@ -1,6 +1,12 @@
 // Azure AI Foundry Control Plane Demo
 // =====================================
 // Microsoft Agent Framework 1.0.0 GA + .NET 10.0 LTS
+//
+// Usage:
+//   dotnet run                          # インタラクティブモード
+//   dotnet run -- --auto --type prompt  # 自動モード（Prompt Agent）
+//   dotnet run -- --auto --type workflow # 自動モード（Workflow Agent）
+//   dotnet run -- --auto --type workflow --no-cleanup # 削除せず残す
 
 using Azure.Identity;
 using FoundryControlPlane.Agents;
@@ -66,17 +72,49 @@ await telemetry.InitializeAsync();
 var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
 logger.LogInformation("Azure AI Foundry Control Plane Demo を開始します");
 
+// ===== コマンドライン引数解析 =====
+bool autoMode = args.Contains("--auto");
+bool noCleanup = args.Contains("--no-cleanup");
+string? typeArg = null;
+for (int i = 0; i < args.Length - 1; i++)
+{
+    if (args[i] == "--type")
+    {
+        typeArg = args[i + 1].ToLower();
+        break;
+    }
+}
+
+if (autoMode)
+{
+    AnsiConsole.MarkupLine("[dim]自動モードで実行中...[/]");
+}
+
 // ===== メニュー選択 =====
-var agentType = AnsiConsole.Prompt(
-    new SelectionPrompt<string>()
-        .Title("[bold]エージェントタイプを選択してください:[/]")
-        .PageSize(5)
-        .AddChoices(new[]
-        {
-            "1. Prompt Agent (単一エージェント)",
-            "2. Workflow Agent (マルチステップ)",
-            "3. 終了"
-        }));
+string agentType;
+if (autoMode && typeArg != null)
+{
+    agentType = typeArg switch
+    {
+        "prompt" => "1. Prompt Agent (単一エージェント)",
+        "workflow" => "2. Workflow Agent (マルチステップ)",
+        _ => "3. 終了"
+    };
+    AnsiConsole.MarkupLine($"[dim]選択: {agentType}[/]");
+}
+else
+{
+    agentType = AnsiConsole.Prompt(
+        new SelectionPrompt<string>()
+            .Title("[bold]エージェントタイプを選択してください:[/]")
+            .PageSize(5)
+            .AddChoices(new[]
+            {
+                "1. Prompt Agent (単一エージェント)",
+                "2. Workflow Agent (マルチステップ)",
+                "3. 終了"
+            }));
+}
 
 // ===== メイン実行 =====
 try
@@ -90,7 +128,7 @@ try
 
         case "2. Workflow Agent (マルチステップ)":
             var workflowRunner = serviceProvider.GetRequiredService<WorkflowRunner>();
-            await workflowRunner.RunAsync();
+            await workflowRunner.RunAsync(autoMode, !noCleanup);
             break;
 
         case "3. 終了":
