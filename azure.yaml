@@ -6,7 +6,36 @@ metadata:
   template: azd-init
 
 # Infrastructure configuration
+# deploy/ フォルダでリソース作成、postprovision で configure/ を実行
 infra:
   provider: bicep
-  path: infra
+  path: infra/deploy
   module: main
+
+# postprovision hook: リソース作成後に設定を適用
+hooks:
+  postprovision:
+    shell: pwsh
+    continueOnError: false
+    run: |
+      Write-Host "Applying configuration to deployed resources..."
+      $env_name = if ($env:AZURE_ENV_NAME) { $env:AZURE_ENV_NAME } else { "dev" }
+      $rg = $env:AZURE_RESOURCE_GROUP
+
+      if (-not $rg) {
+        Write-Error "AZURE_RESOURCE_GROUP is not set"
+        exit 1
+      }
+
+      az deployment group create `
+        --resource-group $rg `
+        --template-file infra/configure/main.bicep `
+        --parameters infra/params/${env_name}.configure.bicepparam `
+        --name "configure-$(Get-Date -Format 'yyyyMMddHHmm')"
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Error "Configuration deployment failed"
+        exit 1
+      }
+
+      Write-Host "Configuration applied successfully!"

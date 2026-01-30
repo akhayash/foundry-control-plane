@@ -85,8 +85,20 @@ az login
 foundry-control-plane/
 ├── README.md                          # このファイル
 ├── infra/                             # Bicepインフラ定義
-│   ├── main.bicep                     # メインテンプレート (AVM使用)
-│   └── main.bicepparam                # パラメータファイル
+│   ├── deploy/                        # リソース作成 (AVM中心)
+│   │   └── main.bicep                 # インフラデプロイ用テンプレート
+│   ├── configure/                     # 設定変更 (カスタム)
+│   │   └── main.bicep                 # 設定適用用テンプレート
+│   ├── params/                        # 環境別パラメータ
+│   │   ├── dev.deploy.bicepparam      # 開発環境 (deploy用)
+│   │   ├── dev.configure.bicepparam   # 開発環境 (configure用)
+│   │   ├── prod.deploy.bicepparam     # 本番環境 (deploy用)
+│   │   └── prod.configure.bicepparam  # 本番環境 (configure用)
+│   ├── modules/                       # 共有モジュール
+│   │   ├── hostedAgentRbac.bicep      # RBAC設定
+│   │   ├── aiFoundryAppInsights.bicep # App Insights接続
+│   │   └── content-safety.bicep       # Content Safety
+│   └── main.bicep                     # (後方互換用)
 ├── scripts/
 │   ├── deploy.ps1                     # デプロイスクリプト
 │   ├── deploy-hosted-agent.ps1        # Hosted Agentデプロイスクリプト
@@ -133,12 +145,35 @@ foundry-control-plane/
 
 ### 1. インフラのデプロイ
 
+インフラは **deploy（リソース作成）** と **configure（設定適用）** に分離されています。
+
 ```powershell
 # Azureにログイン
 az login
 
-# デプロイスクリプトを実行
-./scripts/deploy.ps1 -ResourceGroupName "rg-foundry-demo" -Location "eastus2"
+# Step 1: リソース作成 (AVM使用、15-30分)
+az deployment sub create \
+  --location northcentralus \
+  --template-file infra/deploy/main.bicep \
+  --parameters infra/params/dev.deploy.bicepparam \
+  --name deploy-$(Get-Date -Format 'yyyyMMddHHmm')
+
+# Step 2: 設定適用 (カスタム、1-2分)
+az deployment group create \
+  --resource-group rg-fcpncus-dev \
+  --template-file infra/configure/main.bicep \
+  --parameters infra/params/dev.configure.bicepparam \
+  --name configure-$(Get-Date -Format 'yyyyMMddHHmm')
+```
+
+**設定変更のみの場合（日常運用）:**
+
+```powershell
+# RBAC追加やApp Insights接続など設定変更時は configure だけ実行
+az deployment group create \
+  --resource-group rg-fcpncus-dev \
+  --template-file infra/configure/main.bicep \
+  --parameters infra/params/dev.configure.bicepparam
 ```
 
 ### 2. アプリケーションのビルド
