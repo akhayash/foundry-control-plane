@@ -31,6 +31,9 @@ param tags object = {
   managedBy: 'bicep-avm'
 }
 
+@description('Deploy API Management (Standard SKU). Set to true when using AI Gateway BYO.')
+param deployApim bool = false
+
 // ===================================================================
 // Variables
 // ===================================================================
@@ -225,9 +228,9 @@ module containerRegistry 'br/public:avm/res/container-registry/registry:0.9.0' =
 // }
 
 // API Management (AVM res/api-management/service)
-// NOTE: Consumption SKU for fast deployment (~2min).
-//       AI Gateway BYO requires StandardV2+, use Foundry portal "Create new" for BasicV2.
-module apim 'br/public:avm/res/api-management/service:0.14.0' = {
+// NOTE: Standard SKU required for AI Gateway BYO integration.
+//       Deploy only when needed (deployApim = true), as it takes ~40min.
+module apim 'br/public:avm/res/api-management/service:0.14.0' = if (deployApim) {
   scope: resourceGroup
   name: 'apim-${uniqueSuffix}'
   params: {
@@ -236,7 +239,7 @@ module apim 'br/public:avm/res/api-management/service:0.14.0' = {
     tags: tags
     publisherEmail: 'admin@contoso.com'
     publisherName: 'AI Gateway Demo'
-    sku: 'Consumption'
+    sku: 'Standard'
   }
 }
 
@@ -266,7 +269,7 @@ output containerRegistryResourceId string = containerRegistry.outputs.resourceId
 output containerRegistryLoginServer string = containerRegistry.outputs.loginServer
 
 @description('API Management name')
-output apimName string = apim.outputs.name
+output apimName string = deployApim ? apim.outputs.name : ''
 
 @description('Key Vault name')
 output keyVaultName string = keyVault.outputs.name
