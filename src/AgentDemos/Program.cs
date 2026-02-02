@@ -9,10 +9,10 @@
 //   dotnet run -- --auto --type workflow --no-cleanup # 削除せず残す
 
 using Azure.Identity;
-using FoundryControlPlane.Agents;
-using FoundryControlPlane.Configuration;
-using FoundryControlPlane.Runners;
-using FoundryControlPlane.Telemetry;
+using AgentDemos.Agents;
+using AgentDemos.Configuration;
+using AgentDemos.Runners;
+using AgentDemos.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

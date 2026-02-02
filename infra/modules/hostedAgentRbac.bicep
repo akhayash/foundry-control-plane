@@ -33,16 +33,35 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' e
   name: last(split(containerRegistryId, '/'))
 }
 
-// AcrPull ロールを Project MI に付与
-// NOTE: Role assignments are commonly created separately to allow idempotent behavior
-// This module computes the deterministic role assignment IDs (GUID) but does not attempt
-// to create them here so that re-runs won't fail if assignments already exist.
+// AcrPull ロールを Project MI に付与 (ACR scope)
+// Hosted Agent が Container Registry からイメージを pull するために必要
+resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(containerRegistry.id, aiProject.id, acrPullRoleDefinitionId)
+  scope: containerRegistry
+  properties: {
+    principalId: aiProject.identity.principalId
+    roleDefinitionId: acrPullRoleDefinitionId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Cognitive Services OpenAI User ロールを Project MI に付与 (AI Services Account scope)
+// Hosted Agent が Azure OpenAI モデルにアクセスするために必要
+resource openAIUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(aiServices.id, aiProject.id, cognitiveServicesOpenAIUserRoleDefinitionId)
+  scope: aiServices
+  properties: {
+    principalId: aiProject.identity.principalId
+    roleDefinitionId: cognitiveServicesOpenAIUserRoleDefinitionId
+    principalType: 'ServicePrincipal'
+  }
+}
 
 @description('Project Managed Identity Principal ID')
 output projectPrincipalId string = aiProject.identity.principalId
 
-@description('AcrPull role assignment ID (expected)')
-output acrPullRoleAssignmentId string = subscriptionResourceId('Microsoft.Authorization/roleAssignments', guid(containerRegistry.id, aiProject.id, acrPullRoleDefinitionId))
+@description('AcrPull role assignment ID')
+output acrPullRoleAssignmentId string = acrPullRoleAssignment.id
 
-@description('OpenAI User role assignment ID (expected)')
-output openAIUserRoleAssignmentId string = subscriptionResourceId('Microsoft.Authorization/roleAssignments', guid(aiServices.id, aiProject.id, cognitiveServicesOpenAIUserRoleDefinitionId))
+@description('OpenAI User role assignment ID')
+output openAIUserRoleAssignmentId string = openAIUserRoleAssignment.id

@@ -2,11 +2,11 @@
 // 手動実行用のデモランナー
 // 新しい API (Azure.AI.Agents 2.0) を使用
 
-using FoundryControlPlane.Agents;
+using AgentDemos.Agents;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
-namespace FoundryControlPlane.Runners;
+namespace AgentDemos.Runners;
 
 /// <summary>
 /// Agent Service の動作確認ランナー
