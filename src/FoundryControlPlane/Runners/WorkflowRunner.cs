@@ -43,28 +43,28 @@ public class WorkflowRunner
 
         // 一意なエージェント名（テスト用にタイムスタンプ追加）
         string suffix = autoMode ? $"-{DateTime.Now:HHmmss}" : "";
-        string promptAgentName = $"demo-prompt-agent{suffix}";
+        string subAgentName = $"demo-workflow-sub-agent{suffix}";
         string workflowAgentName = $"demo-workflow-agent{suffix}";
 
         try
         {
-            // 1. まずPrompt Agent を作成（Workflowから参照される）
-            AnsiConsole.MarkupLine("[yellow]1. Prompt Agent を作成 (Workflowから参照用)...[/]");
+            // 1. まずSub Agent を作成（Workflowから参照される）
+            AnsiConsole.MarkupLine("[yellow]1. Sub Agent を作成 (Workflowから参照用)...[/]");
 
-            var promptAgent = await _promptStrategy.CreateAgentAsync(
-                promptAgentName,
+            var subAgent = await _promptStrategy.CreateAgentAsync(
+                subAgentName,
                 "あなたは親切なアシスタントです。ユーザーの質問に丁寧に日本語で答えてください。");
 
-            AnsiConsole.MarkupLine($"[green]✓ Prompt Agent 作成成功[/]");
-            AnsiConsole.MarkupLine($"  Name: [cyan]{promptAgent.Name}[/]");
-            AnsiConsole.MarkupLine($"  Version: {promptAgent.Version}");
+            AnsiConsole.MarkupLine($"[green]✓ Sub Agent 作成成功[/]");
+            AnsiConsole.MarkupLine($"  Name: [cyan]{subAgent.Name}[/]");
+            AnsiConsole.MarkupLine($"  Version: {subAgent.Version}");
             AnsiConsole.WriteLine();
 
             // 2. Workflow Agent を作成
             AnsiConsole.MarkupLine("[yellow]2. Workflow Agent を作成...[/]");
 
             // サンプルYAMLを表示
-            var workflowYaml = WorkflowAgentStrategy.GetSampleWorkflowYaml(promptAgentName);
+            var workflowYaml = WorkflowAgentStrategy.GetSampleWorkflowYaml(subAgentName);
             var yamlPanel = new Panel(workflowYaml)
             {
                 Header = new PanelHeader("[bold]Workflow YAML[/]"),
@@ -124,8 +124,8 @@ public class WorkflowRunner
                 await _workflowStrategy.DeleteAgentAsync(workflowAgentName);
                 AnsiConsole.MarkupLine($"[green]✓ Workflow Agent 削除成功[/]");
 
-                await _promptStrategy.DeleteAgentAsync(promptAgentName);
-                AnsiConsole.MarkupLine($"[green]✓ Prompt Agent 削除成功[/]");
+                await _promptStrategy.DeleteAgentAsync(subAgentName);
+                AnsiConsole.MarkupLine($"[green]✓ Sub Agent 削除成功[/]");
             }
             else if (!cleanup)
             {
@@ -148,7 +148,7 @@ public class WorkflowRunner
                 try
                 {
                     await _workflowStrategy.DeleteAgentAsync(workflowAgentName);
-                    await _promptStrategy.DeleteAgentAsync(promptAgentName);
+                    await _promptStrategy.DeleteAgentAsync(subAgentName);
                     AnsiConsole.MarkupLine("[green]✓ クリーンアップ完了[/]");
                 }
                 catch

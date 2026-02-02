@@ -6,7 +6,7 @@ using '../configure/main.bicep'
 
 param environment = 'dev'
 param baseName = 'fcpncus'
-param aiServicesNameOverride = 'aiffcpncdevpn3s'
-param projectNameOverride = 'aifpfcpndevpn3s'
+param aiServicesNameOverride = 'aiffcpncdevzqum'
+param projectNameOverride = 'aifpfcpndevzqum'
 param enableAppInsights = false
 param appInsightsApiKey = ''

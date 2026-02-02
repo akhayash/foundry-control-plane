@@ -126,7 +126,7 @@ try
     {
         case "1. Prompt Agent (単一エージェント)":
             var promptRunner = serviceProvider.GetRequiredService<AgentServiceRunner>();
-            await promptRunner.RunAsync();
+            await promptRunner.RunAsync(autoMode, !noCleanup);
             break;
 
         case "2. Workflow Agent (マルチステップ)":
