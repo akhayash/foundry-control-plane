@@ -169,6 +169,7 @@ def create_hosted_agent(
     match = re.match(r"https://([^.]+)\.services\.ai\.azure\.com", endpoint)
     if match:
         account_name = match.group(1)
+        # Azure AI Foundryの場合、cognitiveservices エンドポイントを使用
         openai_endpoint = f"https://{account_name}.cognitiveservices.azure.com/"
     else:
         openai_endpoint = endpoint  # fallback
@@ -181,13 +182,18 @@ def create_hosted_agent(
     print(f"  ⚠ Application Insights lookup skipped (can be configured later)")
 
     # 環境変数を構築
+    # Note: Azure AI Foundry では AZURE_AI_PROJECT_ENDPOINT が推奨
     env_vars = {
-        "AZURE_AI_PROJECT_ENDPOINT": endpoint,
+        "AZURE_AI_PROJECT_ENDPOINT": openai_endpoint,  # Program.cs で使用
         "AZURE_OPENAI_ENDPOINT": openai_endpoint,
         "AZURE_OPENAI_DEPLOYMENT_NAME": model_name,
     }
     if app_insights_conn_str:
         env_vars["APPLICATIONINSIGHTS_CONNECTION_STRING"] = app_insights_conn_str
+    
+    print(f"  Environment variables:")
+    print(f"    AZURE_AI_PROJECT_ENDPOINT: {openai_endpoint}")
+    print(f"    AZURE_OPENAI_DEPLOYMENT_NAME: {model_name}")
 
     try:
         agent = client.agents.create_version(

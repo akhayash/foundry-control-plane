@@ -4,7 +4,7 @@
 
 using Azure.AI.Agents;
 
-namespace FoundryControlPlane.Agents;
+namespace AgentDemos.Agents;
 
 /// <summary>
 /// エージェントの種類

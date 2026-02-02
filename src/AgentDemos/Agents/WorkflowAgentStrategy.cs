@@ -4,8 +4,8 @@
 
 using Azure.AI.Agents;
 using Azure.Identity;
-using FoundryControlPlane.Configuration;
-using FoundryControlPlane.Telemetry;
+using AgentDemos.Configuration;
+using AgentDemos.Telemetry;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenAI;
@@ -13,7 +13,7 @@ using OpenAI.Responses;
 
 #pragma warning disable OPENAI001
 
-namespace FoundryControlPlane.Agents;
+namespace AgentDemos.Agents;
 
 /// <summary>
 /// Workflow Agent の登録・実行ロジック（新API）

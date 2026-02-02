@@ -10,7 +10,7 @@ using OpenTelemetry;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
-namespace FoundryControlPlane.Telemetry;
+namespace AgentDemos.Telemetry;
 
 /// <summary>
 /// OpenTelemetry と Application Insights を統合したテレメトリサービス

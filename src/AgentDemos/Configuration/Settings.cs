@@ -1,7 +1,7 @@
 // Configuration Settings
 // =======================
 
-namespace FoundryControlPlane.Configuration;
+namespace AgentDemos.Configuration;
 
 /// <summary>
 /// Azure AI 関連の設定

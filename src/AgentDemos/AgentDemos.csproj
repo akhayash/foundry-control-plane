@@ -5,8 +5,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>FoundryControlPlane</RootNamespace>
-    <AssemblyName>FoundryControlPlane</AssemblyName>
+    <RootNamespace>AgentDemos</RootNamespace>
+    <AssemblyName>AgentDemos</AssemblyName>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <WarningsAsErrors />

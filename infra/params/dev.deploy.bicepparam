@@ -5,8 +5,8 @@
 using '../deploy/main.bicep'
 
 param environment = 'dev'
-param location = 'northcentralus'
-param baseName = 'fcpncus'
+param location = 'japaneast'
+param baseName = 'fcpjpe2'
 param tags = {
   project: 'foundry-control-plane-demo'
   environment: 'dev'

@@ -1,8 +1,7 @@
 // Azure AI Foundry Control Plane - Infrastructure Deployment
 // ===================================================================
-// リソース作成用テンプレート（AVM中心）
-// - 初回デプロイまたはリソース追加/削除時に実行
-// - configure/ との分離により設定変更は高速に実行可能
+// リソース作成と設定を統合したテンプレート（AVM中心）
+// - すべてのリソースのプロビジョニングと RBAC/AppInsights 設定を実行
 // ===================================================================
 
 metadata description = 'Azure AI Foundry Control Plane - Infrastructure Deployment using Azure Verified Modules'
@@ -33,6 +32,13 @@ param tags object = {
 
 @description('Deploy API Management (Standard SKU). Set to true when using AI Gateway BYO.')
 param deployApim bool = false
+
+@description('Enable Application Insights connection wiring to AI Foundry Project')
+param enableAppInsights bool = false
+
+@description('Application Insights API key (required when enableAppInsights = true)')
+@secure()
+param appInsightsApiKey string = ''
 
 // ===================================================================
 // Variables
@@ -244,7 +250,34 @@ module apim 'br/public:avm/res/api-management/service:0.14.0' = if (deployApim) 
 }
 
 // ===================================================================
-// Outputs (for configure/ to reference)
+// Configuration
+// ===================================================================
+
+// Hosted Agent RBAC (Project MI -> ACR Pull & OpenAI User)
+module hostedAgentRbac '../modules/hostedAgentRbac.bicep' = {
+  scope: resourceGroup
+  name: 'hostedAgentRbac-${uniqueSuffix}'
+  params: {
+    aiServicesName: aiFoundry.outputs.aiServicesName
+    projectName: aiFoundry.outputs.aiProjectName
+    containerRegistryId: containerRegistry.outputs.resourceId
+  }
+}
+
+// AI Foundry Project に Application Insights を接続（トレーシング用）
+module aiFoundryAppInsights '../modules/aiFoundryAppInsights.bicep' = if (enableAppInsights && appInsightsApiKey != '') {
+  scope: resourceGroup
+  name: 'aiFoundryAppInsights-${uniqueSuffix}'
+  params: {
+    aiServicesName: aiFoundry.outputs.aiServicesName
+    projectName: aiFoundry.outputs.aiProjectName
+    applicationInsightsResourceId: appInsights.outputs.resourceId
+    appInsightsApiKey: appInsightsApiKey
+  }
+}
+
+// ===================================================================
+// Outputs
 // ===================================================================
 
 @description('Resource group name')
@@ -282,3 +315,12 @@ output storageAccountName string = storage.outputs.name
 
 @description('Content Safety name')
 output contentSafetyName string = contentSafety.outputs.name
+
+@description('AI Foundry Project Managed Identity Principal ID')
+output aiProjectPrincipalId string = hostedAgentRbac.outputs.projectPrincipalId
+
+@description('AcrPull role assignment ID')
+output acrPullRoleAssignmentId string = hostedAgentRbac.outputs.acrPullRoleAssignmentId
+
+@description('OpenAI User role assignment ID')
+output openAIUserRoleAssignmentId string = hostedAgentRbac.outputs.openAIUserRoleAssignmentId

@@ -3,13 +3,13 @@
 // azd / SDK によるデプロイ、テスト実行をサポート
 
 using Azure.Identity;
-using FoundryControlPlane.Configuration;
+using AgentDemos.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Spectre.Console;
 using System.Diagnostics;
 
-namespace FoundryControlPlane.Runners;
+namespace AgentDemos.Runners;
 
 /// <summary>
 /// Hosted Agent の動作確認ランナー

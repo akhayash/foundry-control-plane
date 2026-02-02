@@ -55,278 +55,480 @@ Azure AI Foundryの Control Plane を使用して、各種エージェントの�
 
 ## 前提条件
 
-- Azure サブスクリプション
+- Azure サブスクリプション（Hosted Agent には `Microsoft.FoundryComputePreview` 機能登録が必要）
 - Azure CLI 2.67+ (`az`)
-- .NET 10.0 SDK（LTS）
+- Python 3.10+（Hosted Agent 登録スクリプト用）
 - PowerShell 7.5+
-
-### 認証設定
-
-※ App Insights 接続には **App Insights の API キー** が必要です。安全に自動化する手順は以下を参照してください。
-
-### App Insights 接続（自動化手順、推奨）
-
-1. App Insights の API キーを作成します（必要な権限は `Application Insights コンポーネント → API Access` の操作権限）。
-
-   ```powershell
-   az monitor app-insights api-key create \
-      --api-key configure-conn-key \
-      --resource-group rg-fcpncus-dev \
-      --app appi-fcpncus-dev-pn3s \
-      --read-properties ReadTelemetry \
-      -o json
-   ```
-
-2. 取得したキーを Key Vault に格納（Key Vault に `Set` 権限が必要）。
-
-   ```powershell
-   az keyvault secret set --vault-name <kvName> --name appinsights-conn-key --value "<API_KEY>"
-   ```
-
-3. Key Vault シークレット参照を含む JSON 形式のパラメータファイル（例: `infra/params/dev.configure.kv.params.json`）を作成してデプロイします。Key Vault の `Get` 権限がデプロイを実行する主体に必要です。
-
-   params ファイルの例:
-
-   ```json
-   {
-     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
-     "contentVersion": "1.0.0.0",
-     "parameters": {
-       "environment": { "value": "dev" },
-       "baseName": { "value": "fcpncus" },
-       "aiServicesNameOverride": { "value": "aiffcpncdevpn3s" },
-       "projectNameOverride": { "value": "aifpfcpndevpn3s" },
-       "appInsightsApiKey": {
-         "reference": {
-           "keyVault": {
-             "id": "/subscriptions/<sub>/resourceGroups/rg-fcpncus-dev/providers/Microsoft.KeyVault/vaults/<kvName>",
-             "secretName": "appinsights-conn-key"
-           }
-         }
-       }
-     }
-   }
-   ```
-
-4. デプロイを実行（実行主体は Key Vault の `get` 権限が必要）。
-
-   ```powershell
-   az deployment group create \
-      --resource-group rg-fcpncus-dev \
-      --template-file infra/configure/main.bicep \
-      --parameters infra/params/dev.configure.kv.params.json \
-      --name configure-$(Get-Date -Format 'yyyyMMddHHmm')
-   ```
-
-### 必要な権限（まとめ）
-
-- デプロイ実行主体（Azure CLI 実行ユーザー / Service Principal / Managed Identity）に必要な権限:
-  - `Key Vault` : `get`（Key Vault シークレット参照用）
-  - `Cognitive Services` : `Microsoft.CognitiveServices/accounts/projects/connections/*` の作成権限（Contributor など）
-  - `Authorization` : ロール割当を行う場合は `Microsoft.Authorization/roleAssignments/*` 実行可能な権限（例: Owner/Contributor または特定のロール割当権限）
-  - `Container Registry` : ACR の参照（ロール割当で acrPull を作成する場合）
-
-- API キーの作成を CLI で行う場合、App Insights リソースに対する「API Access」操作権限が必要です。
-  | モジュール | AVM パス | バージョン |
-  | ------------------- | ---------------------------------------- | ---------- |
-  | **AI Foundry** | `avm/ptn/ai-ml/ai-foundry` | 0.6.0 |
-  | **Storage Account** | `avm/res/storage/storage-account` | 0.31.0 |
-  | **Key Vault** | `avm/res/key-vault/vault` | 0.13.3 |
-  | **App Insights** | `avm/res/insights/component` | 0.7.1 |
-  | **Log Analytics** | `avm/res/operational-insights/workspace` | 0.15.0 |
-  | **API Management** | `avm/res/api-management/service` | 0.14.0 |
-  | **Redis** | `avm/res/cache/redis` | 0.16.4 |
-  | **Content Safety** | `avm/res/cognitive-services/account` | 0.14.1 |
-
-> **Note**: AVM AI Foundry パターンモジュールは最新の `Microsoft.CognitiveServices/accounts` + `/projects` アーキテクチャを使用しています（旧 ML Workspace Hub/Project ではありません）。
 
 ## クイックスタート
 
-### 1. インフラのデプロイ
+インフラは **deploy（リソース作成）** と **configure（設定適用）** の2段階に分離されています。
 
-インフラは **deploy（リソース作成）** と **configure（設定適用）** に分離されています。
+### 1. サブスクリプション設定
 
 ```powershell
-# Azureにログイン
 az login
-
-# Step 1: リソース作成 (AVM使用、15-30分)
-az deployment sub create \
-  --location northcentralus \
-  --template-file infra/deploy/main.bicep \
-  --parameters infra/params/dev.deploy.bicepparam \
-  --name deploy-$(Get-Date -Format 'yyyyMMddHHmm')
-
-# Step 2: 設定適用 (カスタム、1-2分)
-az deployment group create \
-  --resource-group rg-fcpncus-dev \
-  --template-file infra/configure/main.bicep \
-  --parameters infra/params/dev.configure.bicepparam \
-  --name configure-$(Get-Date -Format 'yyyyMMddHHmm')
+az account set --subscription "<your-subscription-id>"
 ```
 
-**設定変更のみの場合（日常運用）:**
+### 2. Soft-deleted リソースの確認・削除（必要な場合）
 
 ```powershell
-# RBAC追加やApp Insights接続など設定変更時は configure だけ実行
-az deployment group create \
-  --resource-group rg-fcpncus-dev \
-  --template-file infra/configure/main.bicep \
-  --parameters infra/params/dev.configure.bicepparam
+# soft-deleted リソースを確認
+az cognitiveservices account list-deleted --query "[?contains(id, 'japaneast')]" -o table
+
+# もしリソースがあれば purge（なければスキップ）
+az cognitiveservices account purge --name "<resource-name>" --resource-group "rg-fcpjpe-dev" --location "japaneast"
 ```
 
-### 2. アプリケーションのビルド
+### 3. インフラデプロイ
 
 ```powershell
-cd src/FoundryControlPlane
-dotnet build
+# リソース作成 (15-30分)
+az deployment sub create --location japaneast --template-file infra/deploy/main.bicep --parameters infra/params/dev.deploy.bicepparam
+
+# デプロイ完了後、リソース名を確認（リソースグループ名は infra/params/*.bicepparam の baseName から決まります）
+az resource list --resource-group <resource-group-name> --query "[?type=='Microsoft.CognitiveServices/accounts'].name" -o tsv
 ```
 
-### 3. デモの実行
+### 4. Prompt Agent のデプロイ
+
+.NET プロジェクトを使って Prompt Agent を作成します。
 
 ```powershell
-# エージェント一覧を表示
-dotnet run -- agent list
+# src/AgentDemos フォルダに移動
+cd src/AgentDemos
 
-# Agent Serviceでエージェントを作成
-dotnet run -- agent create --type agent-service --name "DemoAssistant"
+# appsettings.Development.json を作成（まだない場合）
+cp appsettings.Development.json.example appsettings.Development.json
 
-# GroupChatワークフローを実行
-dotnet run -- workflow run --type groupchat
+# エンドポイントを編集して設定
+# ProjectEndpoint: https://<ai-services-name>.japaneast.api.azureml.ms/api/v1.0/subscriptions/<subscription-id>/resourceGroups/<resource-group-name>/providers/Microsoft.MachineLearningServices/workspaces/<project-name>
+
+# Prompt Agent を自動作成（作成後に削除しない）
+dotnet run -- --auto --type prompt --no-cleanup
+
+cd ../..
 ```
 
-### 4. Portal UIで確認
+**作成される Agent:**
 
-- **監視・トレーシング**: Azure AI Foundry Portal → Tracing
-- **メトリクス**: Azure Portal → Application Insights
-- **AI Gateway**: Azure Portal → API Management
+- Name: `demo-prompt-agent-<timestamp>`
+- Model: `gpt-4o`
+- 機能: ユーザーの質問に丁寧に答えるアシスタント
 
-## デモシナリオ
-
-### シナリオ1: エージェントライフサイクル管理
-
-4種類のエージェントのCRUD操作を実演します。
-
-```powershell
-# 1. Azure AI Agent Service
-dotnet run -- agent create --type agent-service --name "MathTutor" --instructions "数学の問題を解決します"
-dotnet run -- agent get --id <agent-id>
-dotnet run -- agent update --id <agent-id> --instructions "高校数学の問題を解決します"
-dotnet run -- agent delete --id <agent-id>
-
-# 2. Hosted Agent
-dotnet run -- agent create --type hosted --name "CodeReviewer"
-# ローカルテスト
-dotnet run -- --type hosted  # メニューから "1. ローカルテスト" 選択
-# Dockerビルド & ACRプッシュ
-./scripts/deploy-hosted-agent.ps1 -ResourceGroup "rg-foundry-demo"
-
-# 3. カスタムエージェント（Microsoft Agent Framework）
-dotnet run -- agent create --type custom --name "CustomAssistant"
-
-# 4. ワークフロー型エージェント
-dotnet run -- agent create --type workflow --name "ContentPipeline"
-```
-
-### シナリオ2: GroupChatワークフロー
-
-Writer、Reviewer、Editor の3つのエージェントがGroupChatパターンで連携し、コンテンツを作成します。
-
-```powershell
-dotnet run -- workflow run --type groupchat --topic "AIエージェントの未来について"
-```
-
-**実行フロー:**
-
-1. **Writer**: 初稿を作成
-2. **Reviewer**: 初稿をレビューし、フィードバックを提供
-3. **Editor**: レビューを踏まえて最終稿を作成
-4. **GroupChatManager**: 次の話者を決定（最大10ターン）
-
-### シナリオ3: 監視・トレーシング（Portal UI）
-
-Application Insightsと連携してエージェントの実行を監視します。
-
-**Azure AI Foundry Portal での確認手順:**
+**稼働確認:**
 
 1. [Azure AI Foundry Portal](https://ai.azure.com) にアクセス
-2. プロジェクトを選択
-3. 左メニューから **Tracing** を選択
-4. 以下の情報を確認:
-   - Trace ID / 実行タイムライン
-   - 各操作の入出力データ
-   - レイテンシ・トークン使用量
-   - エラー詳細（発生時）
+2. プロジェクトを選択 → **Agents** に移動
+3. 作成した `demo-prompt-agent-<timestamp>` をクリック
+4. **Playground** タブで動作確認
+   - 例: 「こんにちは」「Azure AI Foundry とは何ですか？」などを入力してレスポンスを確認
 
-**Azure Portal (Application Insights) での確認:**
+### 5. Workflow Agent のデプロイ
 
-1. Azure Portal → Application Insights リソース
-2. **Live Metrics** でリアルタイム監視
-3. **Transaction search** でトレース検索
-4. **Metrics** でトークン使用量・リクエスト数を可視化
+YAML で定義されたワークフローエージェントと、それが参照する Sub Agent を作成します。
 
-### シナリオ4: AI Gateway機能（Portal UI）
+```powershell
+# src/AgentDemos フォルダに移動
+cd src/AgentDemos
 
-API Managementを介したAI Gateway機能をPortal UIで確認・設定します。
+# Workflow Agent を自動作成（Sub Agent + Workflow Agent）
+dotnet run -- --auto --type workflow --no-cleanup
 
-**Azure Portal (API Management) での確認手順:**
+cd ../..
+```
 
-1. **トークンレート制限**
-   - API Management → APIs → ポリシー
-   - `llm-token-limit` ポリシーで分あたりトークン数を設定
+**作成される Agents:**
 
-2. **セマンティックキャッシング**
-   - API Management → Caches → Azure Managed Redis
-   - キャッシュヒット率・レスポンス時間を確認
+- Sub Agent: `demo-workflow-sub-agent-<timestamp>` (Workflow から呼び出されるプロンプトエージェント)
+- Workflow Agent: `demo-workflow-agent-<timestamp>` (YAML で定義されたワークフロー。Sub Agent を順次実行)
 
-3. **コンテンツセーフティ**
-   - API Management → APIs → ポリシー
-   - `llm-content-safety` ポリシーでフィルタリング設定
-   - Azure AI Content Safety でブロック履歴を確認
+**稼働確認:**
+
+1. [Azure AI Foundry Portal](https://ai.azure.com) にアクセス
+2. プロジェクトを選択 → **Agents** に移動
+3. 作成した `demo-workflow-agent-<timestamp>` をクリック
+4. **Playground** タブで動作確認
+   - Workflow が Sub Agent を呼び出して処理を実行することを確認
+   - 例: 「テストメッセージ」を入力してワークフローの実行を確認
+
+### 6. Hosted Agent のデプロイ
+
+> **Important: Hosted Agent の Managed Identity について**
+>
+> - **開発時（公開前）**: **Project の共通 Managed Identity** を使用
+>   - すべての未公開エージェントが同じ Project Identity で Azure リソースにアクセス
+>   - Bicep デプロイ時に `hostedAgentRbac` モジュールで自動設定済み:
+>     - `AcrPull` (Container Registry からイメージを pull)
+>     - `Cognitive Services OpenAI User` (Azure OpenAI へのアクセス)
+> - **公開後**: **Agent 専用の独立した Identity** が自動作成される
+>   - Agent Application リソースに紐づく専用 Identity
+>   - ⚠️ **RBAC 権限は引き継がれません** - セキュリティのための意図的な設計
+>   - 公開後は、Agent Identity に必要な権限を再度割り当てる必要があります
+>
+> **公開後の RBAC 設定方法:**
+>
+> 1. **Azure Developer CLI (`azd`) を使用する場合** - 推奨:
+>    - Bicep テンプレートで RBAC を定義し、`azd up` で自動設定
+>    - サンプル: [Foundry samples](https://github.com/microsoft-foundry/foundry-samples)
+> 2. **手動で公開する場合**:
+>
+>    ```powershell
+>    # 1. Portal UI で Agent を公開
+>    # 2. Agent Identity の Principal ID を取得
+>    $appId = az cognitiveservices application show `
+>      --name <application-name> `
+>      --project-name <project-name> `
+>      --account-name <ai-services-name> `
+>      --resource-group <rg-name> `
+>      --query "identity.principalId" -o tsv
+>
+>    # 3. 必要なロールを割り当て
+>    # ACR Pull 権限
+>    az role assignment create `
+>      --assignee $appId `
+>      --role "AcrPull" `
+>      --scope <acr-resource-id>
+>
+>    # Azure OpenAI アクセス権限
+>    az role assignment create `
+>      --assignee $appId `
+>      --role "Cognitive Services OpenAI User" `
+>      --scope <ai-services-resource-id>
+>    ```
+>
+> **なぜこのような設計？**  
+> 開発時の権限が自動的に本番環境に引き継がれると、過剰な権限が付与されるリスクがあります。  
+> Agent ごとに必要最小限の権限（Least Privilege）を明示的に設定することで、セキュリティを強化しています。
+>
+> 詳細: [Agent identity concepts](https://learn.microsoft.com/azure/ai-foundry/agents/concepts/agent-identity) | [Publish agents](https://learn.microsoft.com/azure/ai-foundry/agents/how-to/publish-agent)
+
+#### 前提条件: Capability Host の作成（初回のみ）
+
+Hosted Agent をデプロイする前に、account-level capability host を作成する必要があります（**AI Services アカウントごとに1回のみ実行**）。
+
+```powershell
+# Capability Host を作成
+az rest --method put `
+  --url "https://management.azure.com/subscriptions/<subscription-id>/resourceGroups/<resource-group-name>/providers/Microsoft.CognitiveServices/accounts/<ai-services-name>/capabilityHosts/accountcaphost?api-version=2025-10-01-preview" `
+  --headers "content-type=application/json" `
+  --body '{
+    "properties": {
+      "capabilityHostKind": "Agents",
+      "enablePublicHostingEnvironment": true
+    }
+  }'
+
+# プロビジョニング完了を確認（Succeeded になるまで待機）
+az rest --method get `
+  --url "https://management.azure.com/subscriptions/<subscription-id>/resourceGroups/<resource-group-name>/providers/Microsoft.CognitiveServices/accounts/<ai-services-name>/capabilityHosts/accountcaphost?api-version=2025-10-01-preview" `
+  --query "properties.provisioningState" -o tsv
+```
+
+**期待される出力**: `Succeeded`（通常 30-60秒で完了）
+
+#### デプロイ手順
+
+```powershell
+# 1. コンテナイメージをビルド & ACR にプッシュ
+cd src/HostedAgent
+az acr build --registry <acr-name> --image hosted-agent:v1 .
+cd ../..
+
+# 2. Hosted Agent を登録 & 公開
+python scripts/register_hosted_agent.py create \
+  --endpoint "https://<ai-services-name>.services.ai.azure.com/api/projects/<project-name>" \
+  --image "<acr-name>.azurecr.io/hosted-agent:v1" \
+  --name "demo-hosted-agent" \
+  --publish \
+  --subscription-id "<subscription-id>" \
+  --resource-group "<resource-group-name>"
+```
+
+**リソース名の確認方法:**
+
+```powershell
+# AI Services 名を確認（Capability Host 作成に必要）
+az resource list --resource-group <resource-group-name> --query "[?type=='Microsoft.CognitiveServices/accounts'].name" -o tsv
+
+# Project 名を確認
+az resource list --resource-group <resource-group-name> --query "[?type=='Microsoft.MachineLearningServices/workspaces'].name" -o tsv
+
+# ACR 名を確認
+az acr list --resource-group <resource-group-name> --query "[].name" -o tsv
+
+# サブスクリプション ID を確認
+az account show --query id -o tsv
+```
+
+**デプロイ成功の確認:**
+
+```powershell
+# Hosted Agent の状態を確認
+python scripts/register_hosted_agent.py list \
+  --endpoint "https://<ai-services-name>.services.ai.azure.com/api/projects/<project-name>"
+
+# デプロイメント状態を確認（Running になれば成功）
+az rest --method get \
+  --url "https://management.azure.com/subscriptions/<subscription-id>/resourceGroups/<resource-group-name>/providers/Microsoft.CognitiveServices/accounts/<ai-services-name>/projects/<project-name>/applications/demo-hosted-agent-app/agentdeployments/demo-hosted-agent-deployment?api-version=2025-10-01-preview" \
+  --query "properties.state" -o tsv
+```
+
+**期待される出力**: `Running`
+
+#### UI での Deploy開始と稼働確認
+
+コマンドラインでの登録後、**Portal UI でデプロイを開始して稼働確認**を行います：
+
+1. [Azure AI Foundry Portal](https://ai.azure.com) にアクセス
+2. プロジェクトを選択 → **Agents** に移動
+3. **`demo-hosted-agent`** を選択
+4. **Versions** タブでバージョンを確認
+   - 最新バージョン（環境変数が正しく設定されたバージョン）を確認
+5. **Applications** タブ → `demo-hosted-agent-app` を選択
+6. **Deployments** セクションで `demo-hosted-agent-deployment` を選択
+7. **Update deployment** をクリックし、最新バージョンを選択して更新
+   - または、新しいデプロイメントを作成（`+ New deployment`）
+8. デプロイメントの状態が **Running** になるまで待機（数分かかる場合あり）
+9. **Playground** タブに移動して**動作確認:**
+   - 例: 「こんにちは」「今日の天気は？」などを入力してレスポンスを確認
+   - Hosted Agent が正常に応答することを確認
+
+> **Note:**
+>
+> - `--publish` オプションでデプロイメントが作成されますが、既存デプロイメントの更新は Portal UI で行う必要があります
+> - 初回起動には数分かかる場合があります。状態が `Starting` の場合は、`Running` になるまで待機してください
+> - コンテナログに問題がある場合は、トラブルシューティングセクションを参照してください
+
+#### トラブルシューティング
+
+**エラー: "Failed to create Deployment: 400" または "404"**
+
+原因: Capability Host が未作成、またはプロビジョニング中
+
+解決策:
+
+```powershell
+# Capability Host の状態を確認
+az rest --method get \
+  --url "https://management.azure.com/subscriptions/<subscription-id>/resourceGroups/<resource-group-name>/providers/Microsoft.CognitiveServices/accounts/<ai-services-name>/capabilityHosts/accountcaphost?api-version=2025-10-01-preview" \
+  --query "properties.provisioningState" -o tsv
+
+# 出力が "NotFound" の場合: 上記「前提条件」セクションの手順で Capability Host を作成
+# 出力が "Creating" の場合: "Succeeded" になるまで待機（30-60秒）
+# 出力が "Succeeded" の場合: Hosted Agent 登録を再実行
+```
+
+**エラー: "AcrPullWithMSIFailed" または "InvalidAcrPullCredentials"**
+
+原因: Project の Managed Identity に ACR への Pull 権限がない
+
+解決策: Bicep で `hostedAgentRbac` モジュールが正しくデプロイされているか確認（通常は自動設定済み）
+
+**エラー: "Agent creation failed: Failed to invoke the Azure CLI"**
+
+原因: Azure CLI の認証トークンが期限切れ
+
+解決策:
+
+```powershell
+az login
+az account set --subscription <subscription-id>
+```
+
+**エラー: Hosted Agent がメッセージに応答しない（タイムアウト）**
+
+原因:
+
+1. 環境変数の設定ミス
+2. コンテナ起動失敗
+3. **Managed Identity の RBAC 権限不足（最も一般的）**
+
+解決策:
+
+```powershell
+# 1. コンテナログを確認
+$token = az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv
+curl -N "https://<ai-services-name>.services.ai.azure.com/api/projects/<project-name>/agents/demo-hosted-agent/versions/<version-number>/containers/default:logstream?kind=console&tail=100&api-version=2025-11-15-preview" -H "Authorization: Bearer $token"
+
+# 2. ログに "Hosted Agent starting..." が表示されない場合:
+#    - 環境変数が正しく設定されていることを確認
+#    - register_hosted_agent.py で設定された環境変数を確認:
+#      AZURE_AI_PROJECT_ENDPOINT, AZURE_OPENAI_DEPLOYMENT_NAME
+
+# 3. Managed Identity の RBAC 権限を確認
+#    Project の Managed Identity には以下のロールが必要:
+#    - Container Registry: "AcrPull" (イメージの pull 用)
+#    - AI Services Account: "Cognitive Services OpenAI User" (Azure OpenAI アクセス用)
+#    → 通常は hostedAgentRbac モジュールで自動設定されます
+
+# 確認コマンド:
+az role assignment list --assignee <project-principal-id> --scope <acr-resource-id> -o table
+az role assignment list --assignee <project-principal-id> --scope <ai-services-resource-id> -o table
+
+# Principal ID は次のコマンドで取得:
+az cognitiveservices account show --name <ai-services-name> --resource-group <rg-name> --query "projects[0].identity.principalId" -o tsv
+
+# 4. 新しいバージョンを作成して再デプロイ
+python scripts/register_hosted_agent.py create \
+  --endpoint "https://<ai-services-name>.services.ai.azure.com/api/projects/<project-name>" \
+  --image "<acr-name>.azurecr.io/hosted-agent:v1" \
+  --name "demo-hosted-agent" \
+  --model "gpt-4o-mini"
+
+# 5. Portal UI でデプロイメントを新しいバージョンに更新
+#    Applications → demo-hosted-agent-app → Deployments → Update deployment
+```
+
+**期待されるログ出力:**
+
+```
+Hosted Agent starting...
+OpenAI Endpoint: https://<ai-services-name>.cognitiveservices.azure.com/
+Deployment: gpt-4o-mini
+Agent: Hosted Demo Agent
+Hosted Agent ready on port 8088
+```
+
+**重要: Hosted Agent の Managed Identity について**
+
+- **開発時（Unpublished）**: Project の System-assigned Managed Identity を使用
+  - すべての未公開エージェントが共有の Project Identity で認証
+  - Project Identity には ACR と Azure OpenAI へのアクセス権限が必要
+- **公開後（Published）**: 専用の Agent Identity が自動作成される
+  - Agent Application リソースに紐づく独立した Identity
+  - **公開時に RBAC 権限を手動で再割り当てする必要がある**（自動引き継ぎされない）
+
+詳細: [Agent identity concepts | Microsoft Learn](https://learn.microsoft.com/azure/ai-foundry/agents/concepts/agent-identity)
+
+**公開後のワークフローについて**
+
+Agent を公開すると、Project Identity の権限は**自動的には移行されません**。これは Microsoft の意図的な設計です：
+
+> "permissions assigned to a project identity do not transfer to an application upon publishing an agent; you must explicitly (re)assign the necessary privileges to the publishing application's identity"
+>
+> — [Publish and share agents | Microsoft Learn](https://learn.microsoft.com/azure/ai-foundry/agents/how-to/publish-agent)
+
+**理由:** セキュリティ分離のため、各公開済み Agent が独立した Identity を持ち、必要最小限の権限のみを与える設計になっています。
+
+**公開時の標準ワークフロー:**
+
+1. Azure AI Foundry Portal で Agent を公開
+2. Agent Application と専用 Agent Identity が自動作成される
+3. **手動で RBAC ロールを Agent Identity に割り当てる**（Portal UI の "Assign permissions for tool authentication" ステップ）
+4. Agent をデプロイして公開完了
+
+**必要な RBAC 割り当て例:**
+
+```bash
+# Agent Identity の Principal ID を取得
+AGENT_PRINCIPAL_ID=$(az cognitiveservices account show \
+  --name <ai-services-name> \
+  --resource-group <rg-name> \
+  --query "properties.applications[?name=='<agent-app-name>'].identity.principalId" -o tsv)
+
+# ACR Pull 権限を付与
+az role assignment create \
+  --assignee $AGENT_PRINCIPAL_ID \
+  --role "AcrPull" \
+  --scope "/subscriptions/<sub-id>/resourceGroups/<rg-name>/providers/Microsoft.ContainerRegistry/registries/<acr-name>"
+
+# Azure OpenAI 権限を付与
+az role assignment create \
+  --assignee $AGENT_PRINCIPAL_ID \
+  --role "Cognitive Services OpenAI User" \
+  --scope "/subscriptions/<sub-id>/resourceGroups/<rg-name>/providers/Microsoft.CognitiveServices/accounts/<ai-services-name>"
+```
+
+**運用上の推奨事項:**
+
+- 開発・検証中は Unpublished のまま使用して RBAC 管理を最小限に抑える
+- 本番公開時のみ Publish して、専用の RBAC 設定を行う
+- Bicep/Terraform 等の IaC で Agent Identity の RBAC を自動化することも可能
+
+### 7. Portal UI で確認
+
+- **Azure AI Foundry Portal**: [ai.azure.com](https://ai.azure.com) → プロジェクト → Agents
+- **監視・トレーシング**: Azure AI Foundry Portal → Tracing
+- **メトリクス**: Azure Portal → Application Insights
+
+## デプロイされる Agent 一覧
+
+このプロジェクトでは、3種類のエージェントをデプロイします：
+
+| Agent タイプ       | Agent 名                                                                   | 実装方式            | 主な機能                                       |
+| ------------------ | -------------------------------------------------------------------------- | ------------------- | ---------------------------------------------- |
+| **Prompt Agent**   | `demo-prompt-agent-<timestamp>`                                            | Prompt ベース       | ユーザーの質問に丁寧に答えるアシスタント       |
+| **Workflow Agent** | `demo-workflow-agent-<timestamp>`<br>`demo-workflow-sub-agent-<timestamp>` | YAML ワークフロー   | 複数の Sub Agent を順次実行するワークフロー    |
+| **Hosted Agent**   | `demo-hosted-agent`                                                        | コンテナベース (C#) | カスタムコードで実装されたホスト型エージェント |
+
+**特徴の比較:**
+
+- **Prompt Agent**: ポータル UI で instructions とモデルを設定。最もシンプル。
+- **Workflow Agent**: YAML で複雑なフローを定義。複数エージェントの連携が可能。
+- **Hosted Agent**: 完全なコード制御。独自フレームワーク (Microsoft Agent Framework など) を使用可能。コンテナとして実行され、スケーラブル。
 
 ## インフラ構成
 
-### デプロイされるAzureリソース
+### デプロイされる Azure リソース
 
 | リソース                     | 用途                                                       |
 | ---------------------------- | ---------------------------------------------------------- |
 | **Azure AI Foundry**         | エージェント管理の中核 + AI Services（モデルデプロイ含む） |
 | **Azure Storage**            | ファイル・ドキュメント保存                                 |
-| **Azure Cosmos DB**          | スレッド・メッセージデータ保存                             |
 | **Azure Container Registry** | Hosted Agent コンテナイメージ格納                          |
+| **Key Vault**                | シークレット・キー管理                                     |
+| **Log Analytics**            | ログ集約・分析                                             |
 | **Application Insights**     | トレーシング・監視                                         |
-| **API Management**           | AI Gateway（レート制限、キャッシング）                     |
-| **Azure Managed Redis**      | セマンティックキャッシング                                 |
 | **Azure AI Content Safety**  | コンテンツフィルタリング                                   |
 
 ### リソースグループ構成
 
 ```text
-rg-foundry-demo
-├── aif*                            # AI Foundry Account (CognitiveServices)
-│   └── aifp*                       # AI Foundry Project
-│       └── model deployments       # gpt-4o, gpt-4o-mini, text-embedding-3
-├── st*                             # Storage Account
-├── kv*                             # Key Vault
-├── acr*                            # Azure Container Registry (Hosted Agent用)
-├── log-*                           # Log Analytics Workspace
-├── appi-*                          # Application Insights
-├── apim-*                          # API Management
-├── redis-*                         # Azure Cache for Redis
-└── cs-*                            # Content Safety
+<resource-group-name>
+├── <ai-services-name>              # AI Foundry Account (CognitiveServices)
+│   ├── <project-name>              # AI Foundry Project
+│   └── model deployments           # gpt-4o, gpt-4o-mini
+├── <storage-account-name>          # Storage Account
+├── <key-vault-name>                # Key Vault
+├── <acr-name>                      # Azure Container Registry
+├── <log-analytics-name>            # Log Analytics Workspace
+├── <app-insights-name>             # Application Insights
+└── <content-safety-name>           # Content Safety
 ```
 
-## 環境変数
+> **Note:** リソース名は `infra/params/*.bicepparam` で指定した `baseName` + `environment` + ランダムサフィックスで生成されます。
 
-```bash
-# 必須
-AZURE_FOUNDRY_ENDPOINT=https://<resource>.services.ai.azure.com/api/projects/<project>
-AZURE_SUBSCRIPTION_ID=<subscription-id>
-AZURE_RESOURCE_GROUP=rg-foundry-demo
+### RBAC 設定（Hosted Agent 用）
 
-# オプション（デフォルト値あり）
-AZURE_OPENAI_DEPLOYMENT=gpt-4o
-AZURE_APIM_GATEWAY_URL=https://<apim>.azure-api.net
+Hosted Agent が動作するために必要な権限は、Bicep デプロイ時に自動設定されます（`infra/modules/hostedAgentRbac.bicep`）：
+
+| 対象リソース            | ロール                           | スコープ               | 用途                            |
+| ----------------------- | -------------------------------- | ---------------------- | ------------------------------- |
+| **Container Registry**  | `AcrPull`                        | ACR リソース           | コンテナイメージの pull         |
+| **AI Services Account** | `Cognitive Services OpenAI User` | AI Services アカウント | Azure OpenAI モデルへのアクセス |
+
+**重要な注意点:**
+
+- これらの権限は **Project の Managed Identity** に付与されます
+- **公開前（開発中）** のすべての Hosted Agent がこの Project Identity を共有します
+- **公開後**は Agent 専用の Identity が作成されるため、同じ権限を再度割り当てる必要があります
+
+## 設定ファイル
+
+`src/AgentDemos/appsettings.Development.json` に以下を設定：
+
+```json
+{
+  "AzureAI": {
+    "FoundryEndpoint": "https://<ai-services-name>.services.ai.azure.com/api/projects/<project-name>",
+    "ProjectName": "<project-name>"
+  },
+  "ApplicationInsights": {
+    "ConnectionString": "<app-insights-connection-string>"
+  }
+}
 ```
 
 ## 使用技術
@@ -343,18 +545,57 @@ AZURE_APIM_GATEWAY_URL=https://<apim>.azure-api.net
 | **コンテナ**                   | Docker                         | -                |
 | **IaC**                        | Bicep + Azure Verified Modules | 0.40+            |
 
+## ⚠️ 注意事項
+
+### Cognitive Services の Soft Delete について
+
+Azure Cognitive Services（AI Foundry Account を含む）は、削除後 **48日間 soft-deleted 状態で保持** されます。
+同じ名前・リージョンでリソースを再作成する場合、soft-deleted リソースを先に **purge（完全削除）** する必要があります。
+
+**症状**: デプロイ時に以下のようなエラーが発生する場合があります：
+
+```
+A]Services/accounts with the same name still exists.
+```
+
+**確認方法**:
+
+```powershell
+# soft-deleted リソースを確認
+az cognitiveservices account list-deleted --query "[?contains(id, '<location>')]" -o table
+```
+
+**解決方法**:
+
+```powershell
+# 各リソースを完全削除（purge）
+az cognitiveservices account purge --name "<resource-name>" --resource-group "<original-rg>" --location "<location>"
+```
+
+**例（Japan East リージョン）**:
+
+```powershell
+az cognitiveservices account list-deleted --query "[?contains(id, 'japaneast')]" -o table
+
+# 表示されたリソースを順に purge
+az cognitiveservices account purge --name "aiffcpjpdevockb" --resource-group "rg-fcpjpe-dev" --location "japaneast"
+az cognitiveservices account purge --name "cs-fcpjpe-dev-ockb" --resource-group "rg-fcpjpe-dev" --location "japaneast"
+```
+
+> **Note**: purge には「Cognitive Services Contributor」以上のロールが必要です。
+> 元のリソースグループ名が不明な場合は、`az cognitiveservices account list-deleted -o json` で完全な情報を確認してください。
+
 ## クリーンアップ
 
 ```powershell
 # リソースグループごと削除
-./scripts/cleanup.ps1 -ResourceGroupName "rg-foundry-demo"
+az group delete --name rg-fcpjpe2-dev --yes --no-wait
 ```
 
 ## 参考リンク
 
 - [Azure AI Foundry ドキュメント](https://learn.microsoft.com/azure/ai-foundry/)
 - [Microsoft Agent Framework](https://github.com/microsoft/agent-framework)
-- [AI Gateway Reference Architecture](https://learn.microsoft.com/ai/playbook/technology-guidance/generative-ai/dev-starters/genai-gateway/)
 - [Bicep ドキュメント](https://learn.microsoft.com/azure/azure-resource-manager/bicep/)
 
 ## ライセンス
