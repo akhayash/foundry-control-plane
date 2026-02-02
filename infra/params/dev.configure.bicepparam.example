@@ -1,0 +1,11 @@
+// Azure AI Foundry Control Plane - Development Environment Parameters (example)
+// Copy to dev.configure.bicepparam and adjust per environment. Do not commit the real file.
+
+using '../configure/main.bicep'
+
+param environment = 'dev'
+param baseName = '<unique-base>'
+param aiServicesNameOverride = '<ai-services-account-name>'
+param projectNameOverride = '<foundry-project-name>'
+param enableAppInsights = false
+param appInsightsApiKey = ''

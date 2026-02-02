@@ -62,82 +62,81 @@ Azure AI Foundryの Control Plane を使用して、各種エージェントの�
 
 ### 認証設定
 
-このプロジェクトでは **AzureCliCredential** を使用して Azure に認証します。
+※ App Insights 接続には **App Insights の API キー** が必要です。安全に自動化する手順は以下を参照してください。
 
-```bash
-# 事前にAzure CLIでログイン
-az login
-```
+### App Insights 接続（自動化手順、推奨）
 
-> ⚠️ **重要**: `DefaultAzureCredential` は使用しません。ローカル開発では常に `AzureCliCredential` を使用してください。
+1. App Insights の API キーを作成します（必要な権限は `Application Insights コンポーネント → API Access` の操作権限）。
 
-### リージョン制約
+   ```powershell
+   az monitor app-insights api-key create \
+      --api-key configure-conn-key \
+      --resource-group rg-fcpncus-dev \
+      --app appi-fcpncus-dev-pn3s \
+      --read-properties ReadTelemetry \
+      -o json
+   ```
 
-> ⚠️ **Hosted Agent (Preview)** は現在 **North Central US** リージョンのみで利用可能です。
-> 2026年以降、順次リージョンが拡大される予定です。
->
-> そのため、このデモでは `northcentralus` にデプロイすることを推奨します。
-> 他のリージョンにデプロイした場合、Hosted Agent 機能は使用できません。
+2. 取得したキーを Key Vault に格納（Key Vault に `Set` 権限が必要）。
 
-## プロジェクト構成
+   ```powershell
+   az keyvault secret set --vault-name <kvName> --name appinsights-conn-key --value "<API_KEY>"
+   ```
 
-```text
-foundry-control-plane/
-├── README.md                          # このファイル
-├── infra/                             # Bicepインフラ定義
-│   ├── deploy/                        # リソース作成 (AVM中心)
-│   │   └── main.bicep                 # インフラデプロイ用テンプレート
-│   ├── configure/                     # 設定変更 (カスタム)
-│   │   └── main.bicep                 # 設定適用用テンプレート
-│   ├── params/                        # 環境別パラメータ
-│   │   ├── dev.deploy.bicepparam      # 開発環境 (deploy用)
-│   │   ├── dev.configure.bicepparam   # 開発環境 (configure用)
-│   │   ├── prod.deploy.bicepparam     # 本番環境 (deploy用)
-│   │   └── prod.configure.bicepparam  # 本番環境 (configure用)
-│   ├── modules/                       # 共有モジュール
-│   │   ├── hostedAgentRbac.bicep      # RBAC設定
-│   │   ├── aiFoundryAppInsights.bicep # App Insights接続
-│   │   └── content-safety.bicep       # Content Safety
-│   └── main.bicep                     # (後方互換用)
-├── scripts/
-│   ├── deploy.ps1                     # デプロイスクリプト
-│   ├── deploy-hosted-agent.ps1        # Hosted Agentデプロイスクリプト
-│   └── cleanup.ps1                    # クリーンアップスクリプト
-└── src/
-    ├── FoundryControlPlane/           # C# CLIアプリケーション
-    │   ├── FoundryControlPlane.csproj
-    │   ├── Program.cs
-    │   ├── Agents/
-    │   │   ├── AgentServiceStrategy.cs    # Prompt Agent
-    │   │   └── WorkflowAgentStrategy.cs   # Workflow Agent
-    │   ├── Runners/
-    │   │   ├── AgentServiceRunner.cs
-    │   │   ├── WorkflowRunner.cs
-    │   │   └── HostedAgentRunner.cs       # Hosted Agent実行
-    │   └── Telemetry/
-    │       └── TelemetryService.cs        # テレメトリ
-    └── HostedAgent/                   # Hosted Agentコンテナ
-        ├── HostedAgent.csproj
-        ├── Program.cs                 # Hosting Adapterエントリポイント
-        ├── Dockerfile                 # マルチステージビルド
-        ├── agent.yaml                 # azd ai agent 定義
-        └── appsettings.json
-```
+3. Key Vault シークレット参照を含む JSON 形式のパラメータファイル（例: `infra/params/dev.configure.kv.params.json`）を作成してデプロイします。Key Vault の `Get` 権限がデプロイを実行する主体に必要です。
 
-### Azure Verified Modules (AVM) 使用
+   params ファイルの例:
 
-インフラストラクチャは [Azure Verified Modules](https://azure.github.io/Azure-Verified-Modules/) の最新パターンを使用しています：
+   ```json
+   {
+     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+     "contentVersion": "1.0.0.0",
+     "parameters": {
+       "environment": { "value": "dev" },
+       "baseName": { "value": "fcpncus" },
+       "aiServicesNameOverride": { "value": "aiffcpncdevpn3s" },
+       "projectNameOverride": { "value": "aifpfcpndevpn3s" },
+       "appInsightsApiKey": {
+         "reference": {
+           "keyVault": {
+             "id": "/subscriptions/<sub>/resourceGroups/rg-fcpncus-dev/providers/Microsoft.KeyVault/vaults/<kvName>",
+             "secretName": "appinsights-conn-key"
+           }
+         }
+       }
+     }
+   }
+   ```
 
-| モジュール          | AVM パス                                 | バージョン |
-| ------------------- | ---------------------------------------- | ---------- |
-| **AI Foundry**      | `avm/ptn/ai-ml/ai-foundry`               | 0.6.0      |
-| **Storage Account** | `avm/res/storage/storage-account`        | 0.31.0     |
-| **Key Vault**       | `avm/res/key-vault/vault`                | 0.13.3     |
-| **App Insights**    | `avm/res/insights/component`             | 0.7.1      |
-| **Log Analytics**   | `avm/res/operational-insights/workspace` | 0.15.0     |
-| **API Management**  | `avm/res/api-management/service`         | 0.14.0     |
-| **Redis**           | `avm/res/cache/redis`                    | 0.16.4     |
-| **Content Safety**  | `avm/res/cognitive-services/account`     | 0.14.1     |
+4. デプロイを実行（実行主体は Key Vault の `get` 権限が必要）。
+
+   ```powershell
+   az deployment group create \
+      --resource-group rg-fcpncus-dev \
+      --template-file infra/configure/main.bicep \
+      --parameters infra/params/dev.configure.kv.params.json \
+      --name configure-$(Get-Date -Format 'yyyyMMddHHmm')
+   ```
+
+### 必要な権限（まとめ）
+
+- デプロイ実行主体（Azure CLI 実行ユーザー / Service Principal / Managed Identity）に必要な権限:
+  - `Key Vault` : `get`（Key Vault シークレット参照用）
+  - `Cognitive Services` : `Microsoft.CognitiveServices/accounts/projects/connections/*` の作成権限（Contributor など）
+  - `Authorization` : ロール割当を行う場合は `Microsoft.Authorization/roleAssignments/*` 実行可能な権限（例: Owner/Contributor または特定のロール割当権限）
+  - `Container Registry` : ACR の参照（ロール割当で acrPull を作成する場合）
+
+- API キーの作成を CLI で行う場合、App Insights リソースに対する「API Access」操作権限が必要です。
+  | モジュール | AVM パス | バージョン |
+  | ------------------- | ---------------------------------------- | ---------- |
+  | **AI Foundry** | `avm/ptn/ai-ml/ai-foundry` | 0.6.0 |
+  | **Storage Account** | `avm/res/storage/storage-account` | 0.31.0 |
+  | **Key Vault** | `avm/res/key-vault/vault` | 0.13.3 |
+  | **App Insights** | `avm/res/insights/component` | 0.7.1 |
+  | **Log Analytics** | `avm/res/operational-insights/workspace` | 0.15.0 |
+  | **API Management** | `avm/res/api-management/service` | 0.14.0 |
+  | **Redis** | `avm/res/cache/redis` | 0.16.4 |
+  | **Content Safety** | `avm/res/cognitive-services/account` | 0.14.1 |
 
 > **Note**: AVM AI Foundry パターンモジュールは最新の `Microsoft.CognitiveServices/accounts` + `/projects` アーキテクチャを使用しています（旧 ML Workspace Hub/Project ではありません）。
 

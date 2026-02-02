@@ -176,13 +176,9 @@ def create_hosted_agent(
     credential = AzureCliCredential()
     client = AIProjectClient(endpoint=endpoint, credential=credential)
 
-    # Application Insights 接続文字列を取得（トレース用）
-    try:
-        app_insights_conn_str = client.telemetry.get_application_insights_connection_string()
-        print(f"  ✓ Application Insights connected for tracing")
-    except Exception:
-        app_insights_conn_str = None
-        print(f"  ⚠ Application Insights not configured (tracing disabled)")
+    # Application Insights 接続文字列を取得（トレース用）- タイムアウト回避のためスキップ可能
+    app_insights_conn_str = None
+    print(f"  ⚠ Application Insights lookup skipped (can be configured later)")
 
     # 環境変数を構築
     env_vars = {

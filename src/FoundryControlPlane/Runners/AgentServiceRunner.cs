@@ -27,12 +27,16 @@ public class AgentServiceRunner
     /// <summary>
     /// Agent Service を1つ登録して動作確認
     /// </summary>
-    public async Task RunAsync()
+    /// <param name="autoMode">自動モード（確認プロンプトをスキップ）</param>
+    /// <param name="cleanup">終了時にエージェントを削除するか</param>
+    public async Task RunAsync(bool autoMode = false, bool cleanup = true)
     {
         AnsiConsole.MarkupLine("[bold cyan]Agent Service 動作確認 (新API)[/]");
         AnsiConsole.WriteLine();
 
-        const string agentName = "demo-agent-service";
+        // 一意なエージェント名（autoモード時はタイムスタンプ追加）
+        string suffix = autoMode ? $"-{DateTime.Now:HHmmss}" : "";
+        string agentName = $"demo-prompt-agent{suffix}";
 
         try
         {
@@ -61,7 +65,8 @@ public class AgentServiceRunner
             AnsiConsole.WriteLine();
 
             // 3. 実行
-            if (AnsiConsole.Confirm("エージェントを実行しますか?", true))
+            bool runAgent = autoMode || AnsiConsole.Confirm("エージェントを実行しますか?", true);
+            if (runAgent)
             {
                 AnsiConsole.MarkupLine("[yellow]3. エージェントを実行...[/]");
                 var response = await _strategy.TestAgentAsync(agentName, "こんにちは！自己紹介をしてください。");
@@ -76,7 +81,8 @@ public class AgentServiceRunner
             }
 
             // 4. 削除
-            if (AnsiConsole.Confirm("作成したエージェントを削除しますか?", true))
+            bool doCleanup = autoMode ? cleanup : AnsiConsole.Confirm("作成したエージェントを削除しますか?", true);
+            if (doCleanup)
             {
                 AnsiConsole.MarkupLine("[yellow]4. エージェントを削除...[/]");
                 await _strategy.DeleteAgentAsync(agentName);
@@ -93,7 +99,8 @@ public class AgentServiceRunner
             AnsiConsole.WriteException(ex);
 
             // クリーンアップ
-            if (AnsiConsole.Confirm("作成されたエージェントを削除しますか?", false))
+            bool doErrorCleanup = autoMode ? cleanup : AnsiConsole.Confirm("作成されたエージェントを削除しますか?", false);
+            if (doErrorCleanup)
             {
                 try
                 {

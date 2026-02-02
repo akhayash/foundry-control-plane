@@ -10,16 +10,25 @@ param projectName string
 @description('Application Insights resource ID')
 param applicationInsightsResourceId string
 
+@description('Application Insights API key for connection')
+@secure()
+param appInsightsApiKey string
+
 // Application Insights 接続を作成
 resource appInsightsConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview' = {
   name: '${aiServicesName}/${projectName}/application-insights'
   properties: {
-    category: 'ApplicationInsights'
+    category: 'AppInsights'
     target: applicationInsightsResourceId
-    authType: 'AAD'
-    isSharedToAll: true
+    authType: 'ApiKey'
+    isSharedToAll: false
+    useWorkspaceManagedIdentity: false
+    credentials: {
+      key: appInsightsApiKey
+    }
     metadata: {
-      ApiType: 'Azure'
+      ResourceId: applicationInsightsResourceId
+      displayName: last(split(applicationInsightsResourceId, '/'))
     }
   }
 }
