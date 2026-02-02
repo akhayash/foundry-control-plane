@@ -1,0 +1,23 @@
+// Azure AI Foundry Control Plane - Deployment Parameters Template
+// ================================================================
+// Copy this file to dev.deploy.bicepparam or prod.deploy.bicepparam
+// and fill in environment-specific values.
+
+using '../deploy/main.bicep'
+
+// Environment: 'dev' | 'prod'
+param environment = '<ENVIRONMENT>'
+
+// Primary Azure region (e.g., 'northcentralus', 'eastus2')
+param location = '<LOCATION>'
+
+// Base name for resources (e.g., 'fcpncus', 'fcpeus')
+param baseName = '<BASE_NAME>'
+
+// Resource tags
+param tags = {
+  project: 'foundry-control-plane-demo'
+  environment: '<ENVIRONMENT>'
+  managedBy: 'bicep-avm'
+  createdBy: '<YOUR_NAME>'
+}

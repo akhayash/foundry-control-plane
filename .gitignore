@@ -46,7 +46,11 @@ appsettings.Local.json
 # =============================================================================
 # Compiled ARM templates (regenerate from .bicep)
 infra/*.json
-!infra/main.bicepparam
+
+# Environment-specific parameter files (contain resource names)
+infra/params/dev.*.bicepparam
+infra/params/prod.*.bicepparam
+!infra/params/*.bicepparam.example
 
 # Bicep module cache
 .bicep/

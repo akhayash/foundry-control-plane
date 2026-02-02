@@ -157,7 +157,7 @@ module aiFoundry 'br/public:avm/ptn/ai-ml/ai-foundry:0.6.0' = {
           version: '2024-11-20'
         }
         sku: {
-          name: 'Standard'
+          name: 'GlobalStandard'
           capacity: 10
         }
       }
@@ -169,7 +169,7 @@ module aiFoundry 'br/public:avm/ptn/ai-ml/ai-foundry:0.6.0' = {
           version: '2024-07-18'
         }
         sku: {
-          name: 'Standard'
+          name: 'GlobalStandard'
           capacity: 10
         }
       }
@@ -208,22 +208,25 @@ module containerRegistry 'br/public:avm/res/container-registry/registry:0.9.0' =
 }
 
 // Azure Cache for Redis (AVM res/cache/redis)
-module redis 'br/public:avm/res/cache/redis:0.16.4' = {
-  scope: resourceGroup
-  name: 'redis-${uniqueSuffix}'
-  params: {
-    name: 'redis-${baseName}-${environment}-${uniqueShort}'
-    location: location
-    tags: tags
-    skuName: 'Basic'
-    capacity: 0
-    enableNonSslPort: false
-    minimumTlsVersion: '1.2'
-    publicNetworkAccess: 'Enabled'
-  }
-}
+// NOTE: Commented out - takes 15-20 minutes to deploy
+// module redis 'br/public:avm/res/cache/redis:0.16.4' = {
+//   scope: resourceGroup
+//   name: 'redis-${uniqueSuffix}'
+//   params: {
+//     name: 'redis-${baseName}-${environment}-${uniqueShort}'
+//     location: location
+//     tags: tags
+//     skuName: 'Basic'
+//     capacity: 0
+//     enableNonSslPort: false
+//     minimumTlsVersion: '1.2'
+//     publicNetworkAccess: 'Enabled'
+//   }
+// }
 
 // API Management (AVM res/api-management/service)
+// NOTE: Consumption SKU for fast deployment (~2min).
+//       AI Gateway BYO requires StandardV2+, use Foundry portal "Create new" for BasicV2.
 module apim 'br/public:avm/res/api-management/service:0.14.0' = {
   scope: resourceGroup
   name: 'apim-${uniqueSuffix}'
@@ -233,8 +236,7 @@ module apim 'br/public:avm/res/api-management/service:0.14.0' = {
     tags: tags
     publisherEmail: 'admin@contoso.com'
     publisherName: 'AI Gateway Demo'
-    sku: 'BasicV2'
-    skuCapacity: 1
+    sku: 'Consumption'
   }
 }
 
@@ -272,8 +274,8 @@ output keyVaultName string = keyVault.outputs.name
 @description('Storage Account name')
 output storageAccountName string = storage.outputs.name
 
-@description('Redis name')
-output redisName string = redis.outputs.name
+// @description('Redis name')
+// output redisName string = redis.outputs.name
 
 @description('Content Safety name')
 output contentSafetyName string = contentSafety.outputs.name

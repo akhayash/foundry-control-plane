@@ -30,8 +30,22 @@ var uniqueSuffix = uniqueString(subscription().subscriptionId, resourceGroup().n
 var uniqueShort = take(uniqueSuffix, 4)
 
 // Resource names (match deploy/main.bicep)
-var aiServicesName = 'aif${take(baseName, 5)}${take(environment, 3)}${uniqueShort}'
-var projectName = 'aifp${take(baseName, 4)}${take(environment, 3)}${uniqueShort}'
+@description('Override existing AI Foundry Account name (leave empty to use generated name)')
+param aiServicesNameOverride string = ''
+
+@description('Override existing AI Foundry Project name (leave empty to use generated name)')
+param projectNameOverride string = ''
+
+@description('Enable Application Insights connection creation')
+param enableAppInsights bool = true
+
+@description('Application Insights API key (secure). If empty, AppInsights connection will be skipped')
+@secure()
+param appInsightsApiKey string = ''
+
+// Resource names (match deploy/main.bicep)
+var aiServicesName = (aiServicesNameOverride != '' ? aiServicesNameOverride : 'aif${take(baseName, 5)}${take(environment, 3)}${uniqueShort}')
+var projectName = (projectNameOverride != '' ? projectNameOverride : 'aifp${take(baseName, 4)}${take(environment, 3)}${uniqueShort}')
 var containerRegistryName = 'acr${take(baseName, 8)}${take(environment, 3)}${uniqueShort}'
 var appInsightsName = 'appi-${baseName}-${environment}-${uniqueShort}'
 
@@ -71,14 +85,17 @@ module hostedAgentRbac '../modules/hostedAgentRbac.bicep' = {
 }
 
 // AI Foundry Project に Application Insights を接続（トレーシング用）
-module aiFoundryAppInsights '../modules/aiFoundryAppInsights.bicep' = {
+module aiFoundryAppInsights '../modules/aiFoundryAppInsights.bicep' = if (appInsightsApiKey != '') {
   name: 'aiFoundryAppInsights-${uniqueSuffix}'
   params: {
     aiServicesName: aiServicesName
     projectName: projectName
     applicationInsightsResourceId: appInsights.id
+    appInsightsApiKey: appInsightsApiKey
   }
 }
+
+// Application Insights connection module intentionally omitted for this run
 
 // ===================================================================
 // Outputs
@@ -93,5 +110,4 @@ output acrPullRoleAssignmentId string = hostedAgentRbac.outputs.acrPullRoleAssig
 @description('OpenAI User role assignment ID')
 output openAIUserRoleAssignmentId string = hostedAgentRbac.outputs.openAIUserRoleAssignmentId
 
-@description('Application Insights connection name')
-output appInsightsConnectionName string = aiFoundryAppInsights.outputs.connectionName
+// Application Insights connection output intentionally omitted

@@ -22,8 +22,9 @@ resource aiServices 'Microsoft.CognitiveServices/accounts@2024-10-01' existing =
   name: aiServicesName
 }
 
-// 既存の AI Foundry Project を参照
-resource aiProject 'Microsoft.CognitiveServices/accounts@2024-10-01' existing = {
+// 既存の AI Foundry Project を参照 (プロジェクトは Account のサブリソース)
+resource aiProject 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-preview' existing = {
+  parent: aiServices
   name: projectName
 }
 
@@ -33,32 +34,15 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' e
 }
 
 // AcrPull ロールを Project MI に付与
-resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(containerRegistry.id, aiProject.id, acrPullRoleDefinitionId)
-  scope: containerRegistry
-  properties: {
-    roleDefinitionId: acrPullRoleDefinitionId
-    principalId: aiProject.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-// Cognitive Services OpenAI User ロールを Project MI に AI Account に対して付与
-resource openAIUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(aiServices.id, aiProject.id, cognitiveServicesOpenAIUserRoleDefinitionId)
-  scope: aiServices
-  properties: {
-    roleDefinitionId: cognitiveServicesOpenAIUserRoleDefinitionId
-    principalId: aiProject.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
+// NOTE: Role assignments are commonly created separately to allow idempotent behavior
+// This module computes the deterministic role assignment IDs (GUID) but does not attempt
+// to create them here so that re-runs won't fail if assignments already exist.
 
 @description('Project Managed Identity Principal ID')
 output projectPrincipalId string = aiProject.identity.principalId
 
-@description('AcrPull role assignment ID')
-output acrPullRoleAssignmentId string = acrPullRoleAssignment.id
+@description('AcrPull role assignment ID (expected)')
+output acrPullRoleAssignmentId string = subscriptionResourceId('Microsoft.Authorization/roleAssignments', guid(containerRegistry.id, aiProject.id, acrPullRoleDefinitionId))
 
-@description('OpenAI User role assignment ID')
-output openAIUserRoleAssignmentId string = openAIUserRoleAssignment.id
+@description('OpenAI User role assignment ID (expected)')
+output openAIUserRoleAssignmentId string = subscriptionResourceId('Microsoft.Authorization/roleAssignments', guid(aiServices.id, aiProject.id, cognitiveServicesOpenAIUserRoleDefinitionId))
