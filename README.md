@@ -550,6 +550,18 @@ az role assignment create \
 - **監視・トレーシング**: Azure AI Foundry Portal → Tracing
 - **メトリクス**: Azure Portal → Application Insights
 
+### 8. AI Gateway の設定（オプション）
+
+API Management 経由でモデルや Agent Service にアクセスする場合は、AI Gateway を設定します。
+
+詳細な手順は **[AI Gateway セットアップガイド](docs/ai-gateway.md)** を参照してください。
+
+主な機能:
+- レート制限・スロットリング
+- セマンティックキャッシュ（コスト削減）
+- コンテンツセーフティ統合
+- トークン消費メトリクス
+
 ## デプロイされる Agent 一覧
 
 このプロジェクトでは、3種類のエージェントをデプロイします：
