@@ -630,17 +630,18 @@ Hosted Agent が動作するために必要な権限は、Bicep デプロイ時�
 
 ## 使用技術
 
-| カテゴリ                       | 技術                           | バージョン       |
-| ------------------------------ | ------------------------------ | ---------------- |
-| **言語**                       | C# / .NET                      | 10.0 LTS         |
-| **エージェントフレームワーク** | Microsoft Agent Framework      | 1.0.0            |
-| **Azure SDK**                  | Azure.AI.Projects              | 1.2.0-beta.5     |
-|                                | Azure.AI.Agents.Persistent     | 1.0.0            |
-|                                | Azure.AI.AgentServer.Core      | preview (Hosted) |
-|                                | Azure.Identity                 | 1.17.1           |
-| **監視**                       | OpenTelemetry                  | 1.12.0           |
-| **コンテナ**                   | Docker                         | -                |
-| **IaC**                        | Bicep + Azure Verified Modules | 0.40+            |
+| カテゴリ                       | 技術                               | バージョン                 |
+| ------------------------------ | ---------------------------------- | -------------------------- |
+| **言語**                       | C# / .NET                          | 10.0 LTS                   |
+| **エージェントフレームワーク** | Microsoft Agent Framework          | 1.0.0                      |
+| **Azure SDK**                  | Azure.AI.Agents                    | 2.0.0-alpha.20251107.3     |
+|                                | Azure.AI.AgentServer.AgentFramework | 1.0.0-beta.6 (Hosted)      |
+|                                | Azure.AI.OpenAI                    | 2.5.0-beta.1               |
+|                                | Azure.Identity                     | 1.17.0-1.17.1              |
+| **監視**                       | OpenTelemetry                      | 1.12.0                     |
+|                                | Azure.Monitor.OpenTelemetry.Exporter | 1.4.0                    |
+| **コンテナ**                   | Docker                             | -                          |
+| **IaC**                        | Bicep + Azure Verified Modules     | 0.40+                      |
 
 ## ⚠️ 注意事項
 
