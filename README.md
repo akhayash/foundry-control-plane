@@ -169,22 +169,21 @@ cd ../..
 >
 > **公開後の RBAC 設定方法:**
 >
-> 1. **Azure Developer CLI (`azd`) を使用する場合** - 推奨:
->    - Bicep テンプレートで RBAC を定義し、`azd up` で自動設定
->    - サンプル: [Foundry samples](https://github.com/microsoft-foundry/foundry-samples)
-> 2. **手動で公開する場合**:
+> 1. **Portal UI で Agent を公開**
+> 2. **Agent Identity の Principal ID を取得**:
 >
 >    ```powershell
->    # 1. Portal UI で Agent を公開
->    # 2. Agent Identity の Principal ID を取得
 >    $appId = az cognitiveservices application show `
 >      --name <application-name> `
 >      --project-name <project-name> `
 >      --account-name <ai-services-name> `
 >      --resource-group <rg-name> `
 >      --query "identity.principalId" -o tsv
+>    ```
 >
->    # 3. 必要なロールを割り当て
+> 3. **必要なロールを割り当て**:
+>
+>    ```powershell
 >    # ACR Pull 権限
 >    az role assignment create `
 >      --assignee $appId `
@@ -198,6 +197,11 @@ cd ../..
 >      --scope <ai-services-resource-id>
 >    ```
 >
+> **IaC で自動化する場合**:
+>
+> このリポジトリには公開後の Agent Identity 用 RBAC 自動化の Bicep は含まれていません。  
+> IaC で管理したい場合は、[Foundry samples](https://github.com/microsoft-foundry/foundry-samples) の `azd` テンプレートを参考にしてください。
+>
 > **なぜこのような設計？**  
 > 開発時の権限が自動的に本番環境に引き継がれると、過剰な権限が付与されるリスクがあります。  
 > Agent ごとに必要最小限の権限（Least Privilege）を明示的に設定することで、セキュリティを強化しています。
@@ -208,8 +212,35 @@ cd ../..
 
 Hosted Agent をデプロイする前に、account-level capability host を作成する必要があります（**AI Services アカウントごとに1回のみ実行**）。
 
+##### Capability Host の制約と再作成
+
+> **重要**: Microsoft の現在の実装では、**Capability Host は作成後に更新（PUT）できません**。  
+> 設定を変更する必要がある場合は、既存の Capability Host を **DELETE してから再作成** する必要があります。
+>
+> 参考: [Capability hosts concepts | Microsoft Learn](https://learn.microsoft.com/ja-jp/azure/ai-foundry/agents/concepts/capability-hosts)
+
+**設定変更が必要な場合の手順:**
+
 ```powershell
-# Capability Host を作成
+# 1. 既存の Capability Host を削除
+az rest --method delete `
+  --url "https://management.azure.com/subscriptions/<subscription-id>/resourceGroups/<resource-group-name>/providers/Microsoft.CognitiveServices/accounts/<ai-services-name>/capabilityHosts/accountcaphost?api-version=2025-10-01-preview"
+
+# 2. 削除完了を確認（NotFound になれば削除完了）
+az rest --method get `
+  --url "https://management.azure.com/subscriptions/<subscription-id>/resourceGroups/<resource-group-name>/providers/Microsoft.CognitiveServices/accounts/<ai-services-name>/capabilityHosts/accountcaphost?api-version=2025-10-01-preview" `
+  2>&1 | Select-String "NotFound"
+
+# 3. 新しい設定で再作成（下記の作成手順を実行）
+```
+
+##### 作成手順（簡易モード）
+
+**簡易モード** では、Microsoft 管理のリソース（Storage, Cosmos DB, AI Search）を自動的に使用します。  
+開発・テスト・デモには最適で、カスタムリソースの指定は不要です。
+
+```powershell
+# Capability Host を作成（簡易モード）
 az rest --method put `
   --url "https://management.azure.com/subscriptions/<subscription-id>/resourceGroups/<resource-group-name>/providers/Microsoft.CognitiveServices/accounts/<ai-services-name>/capabilityHosts/accountcaphost?api-version=2025-10-01-preview" `
   --headers "content-type=application/json" `
@@ -228,6 +259,47 @@ az rest --method get `
 
 **期待される出力**: `Succeeded`（通常 30-60秒で完了）
 
+##### 標準セットアップ（カスタムリソース）
+
+本番環境やエンタープライズ要件（データ主権、コンプライアンス、VNet 統合など）が必要な場合は、  
+以下のように独自の Azure リソースを指定して Capability Host を作成します：
+
+```powershell
+# 標準セットアップ例
+az rest --method put `
+  --url "https://management.azure.com/subscriptions/<subscription-id>/resourceGroups/<resource-group-name>/providers/Microsoft.CognitiveServices/accounts/<ai-services-name>/capabilityHosts/accountcaphost?api-version=2025-10-01-preview" `
+  --headers "content-type=application/json" `
+  --body '{
+    "properties": {
+      "capabilityHostKind": "Agents",
+      "enablePublicHostingEnvironment": true,
+      "threadStorageConnections": ["your-cosmos-connection"],
+      "storageConnections": ["your-storage-connection"],
+      "vectorStoreConnections": ["your-ai-search-connection"],
+      "aiServicesConnections": ["your-openai-connection"]
+    }
+  }'
+```
+
+**必要なリソース:**
+
+- **Cosmos DB**: スレッドデータの永続化
+- **Storage Account**: ファイル保存
+- **AI Search**: ベクトル検索
+- **Azure OpenAI**: モデル接続
+
+**どちらを選ぶべきか:**
+
+| ユースケース         | 推奨モード       | 理由                                       |
+| -------------------- | ---------------- | ------------------------------------------ |
+| プロトタイプ・デモ   | 簡易モード       | 迅速なセットアップ、管理不要               |
+| 本番環境（一般）     | 簡易モード       | Microsoft 管理で十分な場合が多い           |
+| データ主権・規制対応 | 標準セットアップ | データ保存場所を厳密に制御                 |
+| VNet 統合が必要      | 標準セットアップ | Private Endpoint で完全なネットワーク分離  |
+| カスタムスケーリング | 標準セットアップ | 独自のスケーリング設定やコスト最適化が可能 |
+
+> **Note**: このプロジェクトでは**簡易モード**を使用しています。
+
 #### デプロイ手順
 
 ```powershell
@@ -245,6 +317,27 @@ python scripts/register_hosted_agent.py create \
   --subscription-id "<subscription-id>" \
   --resource-group "<resource-group-name>"
 ```
+
+> **環境変数について:**
+>
+> `register_hosted_agent.py` スクリプトは、Hosted Agent の実行に必要な環境変数を**自動的に設定**します：
+>
+> - `AZURE_AI_PROJECT_ENDPOINT`: プロジェクトエンドポイント（自動抽出）
+> - `AZURE_OPENAI_ENDPOINT`: Azure OpenAI エンドポイント（自動抽出）
+> - `AZURE_OPENAI_DEPLOYMENT_NAME`: モデルデプロイメント名（デフォルト: `gpt-4o-mini`）
+>
+> モデルを変更する場合は `--model` オプションを使用：
+>
+> ```powershell
+> python scripts/register_hosted_agent.py create \
+>   --endpoint "..." \
+>   --image "..." \
+>   --name "demo-hosted-agent" \
+>   --model "gpt-4o" \
+>   --publish \
+>   --subscription-id "..." \
+>   --resource-group "..."
+> ```
 
 **リソース名の確認方法:**
 
@@ -352,10 +445,14 @@ az account set --subscription <subscription-id>
 $token = az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv
 curl -N "https://<ai-services-name>.services.ai.azure.com/api/projects/<project-name>/agents/demo-hosted-agent/versions/<version-number>/containers/default:logstream?kind=console&tail=100&api-version=2025-11-15-preview" -H "Authorization: Bearer $token"
 
-# 2. ログに "Hosted Agent starting..." が表示されない場合:
-#    - 環境変数が正しく設定されていることを確認
-#    - register_hosted_agent.py で設定された環境変数を確認:
-#      AZURE_AI_PROJECT_ENDPOINT, AZURE_OPENAI_DEPLOYMENT_NAME
+# 2. ログに "Hosted Agent starting..." が表示されない場合、環境変数を確認:
+#    register_hosted_agent.py スクリプトが以下を自動設定しています:
+#      - AZURE_AI_PROJECT_ENDPOINT (プロジェクトエンドポイント)
+#      - AZURE_OPENAI_DEPLOYMENT_NAME (デフォルト: gpt-4o-mini)
+#
+#    モデル名による問題の場合:
+#    - プロジェクトにデプロイされているモデル名を確認
+#    - --model オプションで正しいデプロイメント名を指定して再作成
 
 # 3. Managed Identity の RBAC 権限を確認
 #    Project の Managed Identity には以下のロールが必要:
@@ -533,17 +630,18 @@ Hosted Agent が動作するために必要な権限は、Bicep デプロイ時�
 
 ## 使用技術
 
-| カテゴリ                       | 技術                           | バージョン       |
-| ------------------------------ | ------------------------------ | ---------------- |
-| **言語**                       | C# / .NET                      | 10.0 LTS         |
-| **エージェントフレームワーク** | Microsoft Agent Framework      | 1.0.0            |
-| **Azure SDK**                  | Azure.AI.Projects              | 1.2.0-beta.5     |
-|                                | Azure.AI.Agents.Persistent     | 1.0.0            |
-|                                | Azure.AI.AgentServer.Core      | preview (Hosted) |
-|                                | Azure.Identity                 | 1.17.1           |
-| **監視**                       | OpenTelemetry                  | 1.12.0           |
-| **コンテナ**                   | Docker                         | -                |
-| **IaC**                        | Bicep + Azure Verified Modules | 0.40+            |
+| カテゴリ                       | 技術                               | バージョン                 |
+| ------------------------------ | ---------------------------------- | -------------------------- |
+| **言語**                       | C# / .NET                          | 10.0 LTS                   |
+| **エージェントフレームワーク** | Microsoft Agent Framework          | 1.0.0                      |
+| **Azure SDK**                  | Azure.AI.Agents                    | 2.0.0-alpha.20251107.3     |
+|                                | Azure.AI.AgentServer.AgentFramework | 1.0.0-beta.6 (Hosted)      |
+|                                | Azure.AI.OpenAI                    | 2.5.0-beta.1               |
+|                                | Azure.Identity                     | 1.17.0-1.17.1              |
+| **監視**                       | OpenTelemetry                      | 1.12.0                     |
+|                                | Azure.Monitor.OpenTelemetry.Exporter | 1.4.0                    |
+| **コンテナ**                   | Docker                             | -                          |
+| **IaC**                        | Bicep + Azure Verified Modules     | 0.40+                      |
 
 ## ⚠️ 注意事項
 
