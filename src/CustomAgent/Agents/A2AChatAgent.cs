@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenAI.Chat;
 
-namespace A2AAgent.Agents;
+namespace CustomAgent.Agents;
 
 internal sealed class A2AChatAgent
 {

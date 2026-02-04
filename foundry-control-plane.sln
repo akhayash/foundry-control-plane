@@ -9,7 +9,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentDemos", "src\AgentDemo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HostedAgent", "src\HostedAgent\HostedAgent.csproj", "{A338F266-72FB-4A34-8964-C16C4951A546}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "A2AAgent", "src\A2AAgent\A2AAgent.csproj", "{3D8545B2-14D0-4B17-A6DB-3D05B5734B84}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CustomAgent", "src\CustomAgent\CustomAgent.csproj", "{3D8545B2-14D0-4B17-A6DB-3D05B5734B84}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

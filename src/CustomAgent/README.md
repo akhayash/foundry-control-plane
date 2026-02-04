@@ -1,4 +1,4 @@
-# A2AAgent
+# CustomAgent
 
 A minimal A2A-only ASP.NET Core host that returns chat completions from Azure OpenAI. It exposes:
 
@@ -18,7 +18,7 @@ A minimal A2A-only ASP.NET Core host that returns chat completions from Azure Op
 ## Run locally
 
 ```bash
-cd src/A2AAgent
+cd src/CustomAgent
 dotnet run
 ```
 
