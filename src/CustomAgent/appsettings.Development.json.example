@@ -1,0 +1,13 @@
+{
+  "Agent": {
+    "BasePath": "/a2a",
+    "PublicBaseUrl": "http://localhost:5230"
+  },
+  "AzureOpenAI": {
+    "Endpoint": "https://YOUR-RESOURCE.openai.azure.com/",
+    "DeploymentName": "gpt-4o-mini"
+  },
+  "ApplicationInsights": {
+    "ConnectionString": "InstrumentationKey=00000000-0000-0000-0000-000000000000;IngestionEndpoint=https://eastus-8.in.applicationinsights.azure.com/"
+  }
+}
